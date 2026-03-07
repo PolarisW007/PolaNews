@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, ChevronUp } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, ChevronUp, Loader2 } from 'lucide-react';
 
 interface Segment {
   index: number;
   text: string;
   duration_ms?: number;
+  audio_url?: string | null;
 }
 
 interface BroadcastPlayerProps {
@@ -18,98 +19,212 @@ interface BroadcastPlayerProps {
 }
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-export default function BroadcastPlayer({ script, segments, title, onSegmentChange, onClose }: BroadcastPlayerProps) {
+export default function BroadcastPlayer({ segments, title, onSegmentChange, onClose }: BroadcastPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSegment, setCurrentSegment] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [synthLoading, setSynthLoading] = useState(false);
 
-  const currentText = segments[currentSegment]?.text || script;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const totalSegments = segments.length || 1;
 
-  const speak = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+  const currentSeg = segments[currentSegment];
+  const hasAudioUrl = !!currentSeg?.audio_url;
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = speed;
-    utterance.volume = muted ? 0 : volume;
-    utterance.lang = 'zh-CN';
+  const destroyAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+      audioRef.current = null;
+    }
+  }, []);
 
-    utterance.onend = () => {
-      if (currentSegment < totalSegments - 1) {
-        setCurrentSegment(prev => prev + 1);
+  const synthesizeOnDemand = useCallback(async (text: string): Promise<string | null> => {
+    setSynthLoading(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${basePath}/api/tts/synthesize`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: text.slice(0, 5000), voice: 'longshu' }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.url) {
+        return data.data.url;
+      }
+    } catch (e) {
+      console.error('[BroadcastPlayer] TTS 合成失败:', e);
+    } finally {
+      setSynthLoading(false);
+    }
+    return null;
+  }, []);
+
+  const playSegment = useCallback(async (segIndex: number) => {
+    destroyAudio();
+    const seg = segments[segIndex];
+    if (!seg) return;
+
+    let audioUrl = seg.audio_url || null;
+
+    if (!audioUrl && seg.text) {
+      audioUrl = await synthesizeOnDemand(seg.text);
+    }
+
+    if (!audioUrl) {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(seg.text);
+        utterance.rate = speed;
+        utterance.volume = muted ? 0 : volume;
+        utterance.lang = 'zh-CN';
+        utterance.onend = () => {
+          if (segIndex < totalSegments - 1) {
+            setCurrentSegment(segIndex + 1);
+          } else {
+            setIsPlaying(false);
+            setProgress(100);
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    setLoading(true);
+    const audio = new Audio(audioUrl);
+    audio.playbackRate = speed;
+    audio.volume = muted ? 0 : volume;
+    audioRef.current = audio;
+
+    audio.addEventListener('loadedmetadata', () => {
+      setDuration(audio.duration);
+      setLoading(false);
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      setCurrentTime(audio.currentTime);
+      if (audio.duration > 0) {
+        setProgress((audio.currentTime / audio.duration) * 100);
+      }
+    });
+
+    audio.addEventListener('ended', () => {
+      if (segIndex < totalSegments - 1) {
+        setCurrentSegment(segIndex + 1);
       } else {
         setIsPlaying(false);
         setProgress(100);
       }
-    };
+    });
 
-    speechRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, [speed, volume, muted, currentSegment, totalSegments]);
+    audio.addEventListener('error', () => {
+      console.error('[BroadcastPlayer] 音频播放错误');
+      setLoading(false);
+      if (segIndex < totalSegments - 1) {
+        setCurrentSegment(segIndex + 1);
+      } else {
+        setIsPlaying(false);
+      }
+    });
+
+    try {
+      await audio.play();
+      setIsPlaying(true);
+    } catch {
+      setLoading(false);
+    }
+  }, [segments, speed, volume, muted, totalSegments, destroyAudio, synthesizeOnDemand]);
 
   useEffect(() => {
     if (isPlaying) {
-      speak(currentText);
+      playSegment(currentSegment);
       onSegmentChange?.(currentSegment);
     }
-    return () => {
-      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
-    };
-  }, [isPlaying, currentSegment, speak, currentText, onSegmentChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSegment]);
 
   useEffect(() => {
-    if (isPlaying) {
-      let elapsed = 0;
-      const estimatedDuration = currentText.length * 120 / speed;
-      intervalRef.current = setInterval(() => {
-        elapsed += 100;
-        setProgress(Math.min((elapsed / estimatedDuration) * 100, 99));
-      }, 100);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isPlaying, currentText, speed]);
+  }, [speed]);
 
-  const togglePlay = () => {
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = muted ? 0 : volume;
+    }
+  }, [volume, muted]);
+
+  useEffect(() => {
+    return () => {
+      destroyAudio();
+      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+    };
+  }, [destroyAudio]);
+
+  const togglePlay = async () => {
     if (isPlaying) {
-      window.speechSynthesis?.pause();
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (typeof window !== 'undefined') window.speechSynthesis?.pause();
       setIsPlaying(false);
     } else {
-      if (window.speechSynthesis?.paused) {
+      if (audioRef.current && audioRef.current.paused && audioRef.current.currentTime > 0) {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      } else if (typeof window !== 'undefined' && window.speechSynthesis?.paused) {
         window.speechSynthesis.resume();
+        setIsPlaying(true);
+      } else {
+        await playSegment(currentSegment);
+        onSegmentChange?.(currentSegment);
       }
-      setIsPlaying(true);
     }
   };
 
   const skipPrev = () => {
-    window.speechSynthesis?.cancel();
-    setCurrentSegment(Math.max(0, currentSegment - 1));
+    destroyAudio();
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+    const newIdx = Math.max(0, currentSegment - 1);
+    setCurrentSegment(newIdx);
     setProgress(0);
-    if (isPlaying) setIsPlaying(true);
+    setCurrentTime(0);
   };
 
   const skipNext = () => {
-    window.speechSynthesis?.cancel();
+    destroyAudio();
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
     if (currentSegment < totalSegments - 1) {
       setCurrentSegment(currentSegment + 1);
       setProgress(0);
-      if (isPlaying) setIsPlaying(true);
+      setCurrentTime(0);
     }
   };
 
   const cycleSpeed = () => {
     const idx = SPEEDS.indexOf(speed);
     setSpeed(SPEEDS[(idx + 1) % SPEEDS.length]);
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
   };
 
   return (
@@ -132,10 +247,17 @@ export default function BroadcastPlayer({ script, segments, title, onSegmentChan
             </button>
             <button
               onClick={togglePlay}
+              disabled={loading || synthLoading}
               className="p-3 rounded-full"
               style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-primary)' }}
             >
-              {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+              {loading || synthLoading ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : isPlaying ? (
+                <Pause size={20} />
+              ) : (
+                <Play size={20} className="ml-0.5" />
+              )}
             </button>
             <button onClick={skipNext} className="p-2 rounded-lg hover:bg-white/5">
               <SkipForward size={18} style={{ color: 'var(--text-secondary)' }} />
@@ -148,6 +270,9 @@ export default function BroadcastPlayer({ script, segments, title, onSegmentChan
             </p>
             <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
               {currentSegment + 1} / {totalSegments} 段
+              {duration > 0 && ` · ${formatTime(currentTime)} / ${formatTime(duration)}`}
+              {hasAudioUrl && ' · CosyVoice'}
+              {synthLoading && ' · 正在合成...'}
             </p>
           </div>
 
@@ -161,13 +286,19 @@ export default function BroadcastPlayer({ script, segments, title, onSegmentChan
             </button>
 
             <button onClick={() => setMuted(!muted)} className="p-2 rounded-lg hover:bg-white/5">
-              {muted ? <VolumeX size={18} style={{ color: 'var(--text-secondary)' }} /> : <Volume2 size={18} style={{ color: 'var(--text-secondary)' }} />}
+              {muted
+                ? <VolumeX size={18} style={{ color: 'var(--text-secondary)' }} />
+                : <Volume2 size={18} style={{ color: 'var(--text-secondary)' }} />}
             </button>
 
             <button onClick={() => setExpanded(!expanded)} className="p-2 rounded-lg hover:bg-white/5">
               <ChevronUp
                 size={18}
-                style={{ color: 'var(--text-secondary)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                style={{
+                  color: 'var(--text-secondary)',
+                  transform: expanded ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}
               />
             </button>
 
@@ -184,15 +315,29 @@ export default function BroadcastPlayer({ script, segments, title, onSegmentChan
             {segments.map((seg, i) => (
               <div
                 key={i}
-                onClick={() => { setCurrentSegment(i); setProgress(0); if (isPlaying) { window.speechSynthesis?.cancel(); setIsPlaying(true); } }}
-                className="p-2 rounded-lg cursor-pointer text-sm mb-1 transition-colors"
+                onClick={() => {
+                  destroyAudio();
+                  if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+                  setCurrentSegment(i);
+                  setProgress(0);
+                  setCurrentTime(0);
+                  if (isPlaying) {
+                    playSegment(i);
+                  }
+                }}
+                className="p-2 rounded-lg cursor-pointer text-sm mb-1 transition-colors flex items-center gap-2"
                 style={{
                   backgroundColor: i === currentSegment ? 'rgba(0,230,118,0.1)' : 'transparent',
                   color: i === currentSegment ? 'var(--accent)' : 'var(--text-secondary)',
                   borderLeft: i === currentSegment ? '2px solid var(--accent)' : '2px solid transparent',
                 }}
               >
-                {seg.text.slice(0, 100)}...
+                <span className="flex-1 truncate">{seg.text.slice(0, 100)}...</span>
+                {seg.audio_url && (
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,230,118,0.15)', color: 'var(--accent)' }}>
+                    音频
+                  </span>
+                )}
               </div>
             ))}
           </div>

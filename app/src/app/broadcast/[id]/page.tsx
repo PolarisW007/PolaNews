@@ -19,6 +19,8 @@ import { useToast } from '@/components/ui/Toast';
 interface Segment {
   index: number;
   text: string;
+  duration_ms?: number;
+  audio_url?: string | null;
 }
 
 interface Broadcast {

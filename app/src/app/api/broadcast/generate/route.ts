@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { queryOne, execute } from '@/lib/db/schema';
 import { callLLM } from '@/lib/ai/llm';
+import { generateBroadcastAudio } from '@/lib/services/tts';
 
 export async function POST(req: NextRequest) {
   try {
     let lang = 'zh';
+    let voice = 'longshu';
     try {
       const body = await req.json();
       if (body?.lang) lang = String(body.lang);
+      if (body?.voice) voice = String(body.voice);
     } catch {
-      // use default lang
+      // use defaults
     }
 
     const digest = await queryOne(
@@ -49,14 +52,17 @@ export async function POST(req: NextRequest) {
     }
 
     const estimatedDuration = script.length * 120;
-
     const id = uuidv4();
     const broadcastDate = (digest.digest_date as string) || new Date().toISOString().slice(0, 10);
 
     await execute(
       `INSERT INTO broadcasts (id, digest_id, broadcast_date, language, script, segments, total_duration_ms, voice_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'default', 'ready')`,
-      [id, digest.id as string, broadcastDate, lang, script, JSON.stringify(segments), estimatedDuration]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'generating')`,
+      [id, digest.id as string, broadcastDate, lang, script, JSON.stringify(segments), estimatedDuration, voice]
+    );
+
+    generateBroadcastAudio(id).catch(err =>
+      console.error('[Broadcast] 音频合成后台任务失败:', err)
     );
 
     const broadcast = await queryOne('SELECT * FROM broadcasts WHERE id = $1', [id]);

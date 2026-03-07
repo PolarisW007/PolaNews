@@ -51,6 +51,8 @@ export default function ArticlePage() {
   const [translating, setTranslating] = useState(false);
   const [translatedParagraphs, setTranslatedParagraphs] = useState<{ original: string; translated: string }[]>([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsAudioRef, setTtsAudioRef] = useState<HTMLAudioElement | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
 
   useEffect(() => {
@@ -79,31 +81,56 @@ export default function ArticlePage() {
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+      if (ttsAudioRef) { ttsAudioRef.pause(); ttsAudioRef.removeAttribute('src'); }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleTTS = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      toast('当前浏览器不支持语音朗读', 'error');
-      return;
-    }
+  const handleTTS = async () => {
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      if (ttsAudioRef) { ttsAudioRef.pause(); ttsAudioRef.removeAttribute('src'); setTtsAudioRef(null); }
+      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
       setIsSpeaking(false);
       return;
     }
+
     const text = article?.ai_summary || article?.summary || article?.content?.replace(/<[^>]*>/g, '') || '';
-    if (!text.trim()) {
-      toast('没有可朗读的内容', 'info');
-      return;
+    if (!text.trim()) { toast('没有可朗读的内容', 'info'); return; }
+
+    setTtsLoading(true);
+    const ttBasePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${ttBasePath}/api/tts/synthesize`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ text: text.slice(0, 5000), voice: 'longwan' }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.url) {
+        const audio = new Audio(data.data.url);
+        audio.onended = () => { setIsSpeaking(false); setTtsAudioRef(null); };
+        audio.onerror = () => { setIsSpeaking(false); setTtsAudioRef(null); toast('音频播放失败', 'error'); };
+        setTtsAudioRef(audio);
+        await audio.play();
+        setIsSpeaking(true);
+        setTtsLoading(false);
+        return;
+      }
+    } catch { /* fall through to Web Speech API */ }
+    setTtsLoading(false);
+
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
+      utterance.lang = 'zh-CN'; utterance.rate = 1;
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      toast('语音合成服务暂不可用', 'error');
     }
-    const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
-    utterance.lang = 'zh-CN';
-    utterance.rate = 1;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
   };
 
   const handleShare = async () => {
@@ -253,6 +280,7 @@ export default function ArticlePage() {
             </h1>
             <button
               onClick={handleTTS}
+              disabled={ttsLoading}
               className="mt-1 flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors"
               style={{
                 background: isSpeaking ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
@@ -261,8 +289,8 @@ export default function ArticlePage() {
               }}
               title={isSpeaking ? '停止朗读' : '朗读文章'}
             >
-              {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-              {isSpeaking ? '停止' : '朗读'}
+              {ttsLoading ? <Loader2 size={16} className="animate-spin" /> : isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              {ttsLoading ? '合成中...' : isSpeaking ? '停止' : '朗读'}
             </button>
           </div>
 
