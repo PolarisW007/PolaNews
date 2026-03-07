@@ -55,7 +55,8 @@ export async function extractTrendingKeywords(hours = 24): Promise<TrendingKeywo
     const result = await callLLM(titles.slice(0, 4000), systemPrompt);
     const match = result.match(/\[[\s\S]*\]/);
     if (match) {
-      return JSON.parse(match[0]) as TrendingKeyword[];
+      const parsed = JSON.parse(match[0]) as TrendingKeyword[];
+      return parsed.filter(k => k.keyword.length >= 2 && !STOP_WORDS.has(k.keyword.toLowerCase()));
     }
   } catch (e) {
     console.error('[Trending] Keyword extraction error:', e);

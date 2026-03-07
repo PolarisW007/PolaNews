@@ -56,7 +56,11 @@ export async function initializeDatabase(): Promise<void> {
   if (initialized) return;
   initialized = true;
 
-  await execute(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
+  try {
+    await execute(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
+  } catch {
+    console.warn('[DB] pgcrypto extension not available or insufficient privileges (pre-installed by admin is fine)');
+  }
   try {
     await execute(`CREATE EXTENSION IF NOT EXISTS "vector"`);
   } catch {

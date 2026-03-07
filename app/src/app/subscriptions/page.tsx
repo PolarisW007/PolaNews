@@ -65,19 +65,18 @@ export default function SubscriptionsPage() {
       if (!file) return;
       setImporting(true);
       try {
-        const formData = new FormData();
-        formData.append('file', file);
+        const opmlText = await file.text();
         const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-        const headers: Record<string, string> = {};
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch(`${basePath}/api/subscriptions/import`, {
           method: 'POST',
           headers,
-          body: formData,
+          body: JSON.stringify({ opml: opmlText }),
         });
         const json = await res.json();
         if (json.success) {
-          toast(`OPML 导入成功，共导入 ${json.data?.imported_count ?? ''} 个订阅源`, 'success');
+          toast(`OPML 导入成功，共导入 ${json.data?.imported ?? json.data?.imported_count ?? ''} 个订阅源`, 'success');
           loadFeeds();
         } else {
           toast(`导入失败：${json.error || '未知错误'}`, 'error');

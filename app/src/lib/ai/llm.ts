@@ -271,7 +271,18 @@ function generateMockResponse(prompt: string, systemPrompt: string): string {
   }
 
   if (systemPrompt.includes('趋势') || systemPrompt.includes('关键词')) {
-    const words = prompt.split(/[\s\n]+/).filter(w => w.length >= 3 && w.length <= 20);
+    const MOCK_STOPS = new Set([
+      'the','a','an','is','are','was','were','be','been','have','has','had',
+      'do','does','did','will','would','could','should','can','may','might',
+      'to','of','in','for','on','with','at','by','from','as','into','and',
+      'or','but','not','no','nor','so','if','than','too','very','just','also',
+      'it','its','this','that','these','those','what','which','who','whom',
+      'his','her','their','our','your','my','we','they','he','she','me','him',
+      'us','them','you','new','says','said','get','got','like','even','now',
+      'about','how','more','most','some','any','all','both','each','few',
+      'other','such','only','own','same','up','out','off','over','under',
+    ]);
+    const words = prompt.split(/[\s\n,.:;!?()\[\]"']+/).filter(w => w.length >= 3 && w.length <= 20 && !MOCK_STOPS.has(w.toLowerCase()));
     const wordCount: Record<string, number> = {};
     for (const w of words) {
       const clean = w.replace(/[^\w\u4e00-\u9fff]/g, '');
