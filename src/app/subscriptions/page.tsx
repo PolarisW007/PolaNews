@@ -186,7 +186,7 @@ export default function SubscriptionsPage() {
                             } catch {
                               toast('删除订阅源失败', 'error');
                             }
-                          }
+                          }}
                         >
                           <Trash2 size={14} style={{ color: 'var(--danger)' }} />
                         </button>
