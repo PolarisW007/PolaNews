@@ -11,6 +11,7 @@ export interface User {
 
 export interface UserPreferences {
   language: 'zh' | 'en' | 'ja';
+  digest_language?: 'zh' | 'en' | 'ja';
   theme: 'dark' | 'light' | 'system';
   digest_time: string[];
   categories: string[];

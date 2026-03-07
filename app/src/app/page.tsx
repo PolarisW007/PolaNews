@@ -254,7 +254,7 @@ export default function HomePage() {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 120_000);
-      const res = await fetch('/api/feeds/fetch', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/feeds/fetch`, {
         method: 'POST',
         signal: controller.signal,
       });

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 import { query, queryOne } from './db/schema';
 import { v4 as uuidv4 } from 'uuid';
-import type { User } from './types';
+import type { User, UserPreferences } from './types';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'worldoverview-secret-key-change-in-production';
 const TOKEN_EXPIRY = '7d';
@@ -59,7 +59,7 @@ export async function getCurrentUser(req: NextRequest): Promise<User | null> {
 export async function createUser(email: string, password: string, displayName: string): Promise<User> {
   const id = uuidv4();
   const passwordHash = hashPassword(password);
-  const preferences = { language: 'zh', theme: 'dark', digest_time: ['08:00'], categories: [] };
+  const preferences: UserPreferences = { language: 'zh', theme: 'dark', digest_time: ['08:00'], categories: [] };
 
   await query(
     'INSERT INTO users (id, email, password_hash, display_name, preferences) VALUES ($1, $2, $3, $4, $5)',

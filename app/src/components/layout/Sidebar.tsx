@@ -54,7 +54,7 @@ export default function Sidebar() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch('/api/feeds')
+    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/feeds`)
       .then(r => r.json())
       .then(json => {
         if (json.success && Array.isArray(json.data)) {

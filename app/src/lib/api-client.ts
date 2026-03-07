@@ -1,4 +1,4 @@
-const BASE_URL = '';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -19,7 +19,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      window.location.href = `${BASE_URL}/login`;
     }
     throw new Error('Unauthorized');
   }

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await subscribePush(user.id, { endpoint, p256dh, auth });
+    await subscribePush(user.id, endpoint, p256dh, auth);
 
     return NextResponse.json({
       success: true,
