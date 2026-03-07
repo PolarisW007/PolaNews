@@ -78,7 +78,7 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
     const seg = segments[segIndex];
     if (!seg) return;
 
-    let audioUrl = seg.audio_url || null;
+    let audioUrl = seg.audio_url ? `${basePath}${seg.audio_url}` : null;
 
     if (!audioUrl && seg.text) {
       audioUrl = await synthesizeOnDemand(seg.text);
