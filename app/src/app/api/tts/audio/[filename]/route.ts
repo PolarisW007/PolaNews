@@ -17,7 +17,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: '音频文件不存在' }, { status: 404 });
     }
 
-    return new NextResponse(buffer, {
+    const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    return new NextResponse(uint8, {
       status: 200,
       headers: {
         'Content-Type': 'audio/mpeg',
