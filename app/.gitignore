@@ -1,5 +1,4 @@
 # dependencies
-node_modules/
 /node_modules
 /.pnp
 .pnp.*
@@ -13,13 +12,10 @@ node_modules/
 /coverage
 
 # next.js
-.next/
 /.next/
-out/
 /out/
 
 # production
-build/
 /build
 
 # misc
@@ -46,9 +42,9 @@ yarn-error.log*
 next-env.d.ts
 
 # database (runtime data)
-data/*.db
-data/*.db-wal
-data/*.db-shm
+/data/*.db
+/data/*.db-wal
+/data/*.db-shm
 
 # IDE
 .idea/
