@@ -1,0 +1,582 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { formatDistanceToNow } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
+import { RefreshCw, Loader2, Newspaper, ArrowRight, Calendar, Globe, ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { clsx } from 'clsx';
+import MainLayout from '@/components/layout/MainLayout';
+import { useToast } from '@/components/ui/Toast';
+import { api } from '@/lib/api-client';
+
+interface Article {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  feed_title: string;
+  favicon_url: string;
+  category: string;
+  cover_image: string;
+  published_at: string;
+  created_at: string;
+  title_zh?: string;
+  summary_zh?: string;
+}
+
+type DisplayLang = 'zh' | 'en' | 'original';
+
+interface Digest {
+  id: string;
+  date: string;
+  headline_count: number;
+  title: string;
+}
+
+const categories = [
+  { key: '', label: '全部' },
+  { key: 'tech', label: '科技' },
+  { key: 'finance', label: '财经' },
+  { key: 'politics', label: '政治' },
+  { key: 'ai', label: 'AI' },
+  { key: 'military', label: '军事' },
+  { key: 'society', label: '社会' },
+];
+
+function SkeletonCard() {
+  return (
+    <div
+      className="rounded-xl p-5"
+      style={{
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      <div className="skeleton mb-3 h-5 w-3/4 rounded" />
+      <div className="skeleton mb-2 h-3 w-1/3 rounded" />
+      <div className="skeleton mb-1 h-3 w-full rounded" />
+      <div className="skeleton h-3 w-2/3 rounded" />
+    </div>
+  );
+}
+
+function ArticleCard({ article, displayLang }: { article: Article; displayLang: DisplayLang }) {
+  const timeAgo = formatDistanceToNow(new Date(article.published_at || article.created_at), {
+    addSuffix: true,
+    locale: zhCN,
+  });
+
+  const displayTitle = displayLang === 'zh' && article.title_zh
+    ? article.title_zh
+    : article.title;
+
+  const rawSummary = displayLang === 'zh' && article.summary_zh
+    ? article.summary_zh
+    : article.summary;
+
+  const truncatedSummary = rawSummary
+    ? rawSummary.length > 120
+      ? rawSummary.slice(0, 120) + '...'
+      : rawSummary
+    : '';
+
+  return (
+    <Link href={`/article/${article.id}`}>
+      <div
+        className="glow-border animate-fade-in cursor-pointer rounded-xl p-5 transition-colors"
+        style={{
+          backgroundColor: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+        }}
+      >
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <h3
+              className="mb-2 text-base font-semibold leading-snug"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {displayTitle}
+            </h3>
+
+            <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {article.favicon_url && (
+                <img
+                  src={article.favicon_url}
+                  alt=""
+                  className="h-4 w-4 rounded"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              )}
+              <span>{article.feed_title}</span>
+              <span>·</span>
+              <span>{timeAgo}</span>
+            </div>
+
+            {truncatedSummary && (
+              <p className="mb-3 text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                {truncatedSummary}
+              </p>
+            )}
+
+            {article.category && (
+              <span
+                className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
+                style={{
+                  backgroundColor: 'var(--glow)',
+                  color: 'var(--accent)',
+                }}
+              >
+                {article.category}
+              </span>
+            )}
+          </div>
+
+          {article.cover_image && (
+            <div className="flex-shrink-0">
+              <img
+                src={article.cover_image}
+                alt=""
+                className="rounded-lg object-cover"
+                style={{ width: 120, height: 80 }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+export default function HomePage() {
+  const { toast } = useToast();
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [digest, setDigest] = useState<Digest | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [displayLang, setDisplayLang] = useState<DisplayLang>('zh');
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterImportance, setFilterImportance] = useState('');
+  const [filterSentiment, setFilterSentiment] = useState('');
+  const [filterTimeRange, setFilterTimeRange] = useState('');
+
+  const langOptions: { key: DisplayLang; label: string }[] = [
+    { key: 'zh', label: '中文' },
+    { key: 'en', label: 'English' },
+    { key: 'original', label: '原文' },
+  ];
+
+  const fetchArticles = useCallback(async (category: string, pageNum: number, append = false) => {
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      const params: Record<string, string | number> = { page: pageNum, limit: 20 };
+      if (category) params.category = category;
+      if (filterImportance) params.importance = filterImportance;
+      if (filterSentiment) params.sentiment = filterSentiment;
+      if (filterTimeRange) {
+        const now = new Date();
+        if (filterTimeRange === 'today') {
+          params.date_from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        } else if (filterTimeRange === 'week') {
+          const d = new Date(now); d.setDate(d.getDate() - 7);
+          params.date_from = d.toISOString();
+        } else if (filterTimeRange === 'month') {
+          const d = new Date(now); d.setMonth(d.getMonth() - 1);
+          params.date_from = d.toISOString();
+        }
+      }
+
+      const raw = await api.articles.list(params);
+      const result = raw as unknown as { articles: Article[]; total: number; page: number; limit: number };
+      const list = Array.isArray(result.articles) ? result.articles : Array.isArray(raw) ? (raw as unknown as Article[]) : [];
+
+      if (append) {
+        setArticles((prev) => [...prev, ...list]);
+      } else {
+        setArticles(list);
+      }
+
+      setHasMore(list.length >= 20);
+    } catch {
+      toast('加载文章失败，请稍后重试', 'error');
+      if (!append) setArticles([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [filterImportance, filterSentiment, filterTimeRange]);
+
+  const fetchDigest = useCallback(async () => {
+    try {
+      const data = (await api.digests.latest()) as unknown as Digest;
+      setDigest(data);
+    } catch {
+      toast('加载今日摘要失败', 'error');
+    }
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+    fetchArticles(activeCategory, 1);
+  }, [activeCategory, fetchArticles, filterImportance, filterSentiment, filterTimeRange]);
+
+  useEffect(() => {
+    fetchDigest();
+  }, [fetchDigest]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchArticles(activeCategory, nextPage, true);
+  };
+
+  const [fetchMsg, setFetchMsg] = useState('');
+
+  const handleManualFetch = async () => {
+    if (fetching) return;
+    setFetching(true);
+    setFetchMsg('正在抓取 RSS 源，可能需要 30 秒左右...');
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      const res = await fetch('/api/feeds/fetch', {
+        method: 'POST',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const json = await res.json();
+      if (json.success) {
+        setFetchMsg(`抓取完成！共 ${json.data.feeds_count} 个源，${json.data.articles_count} 篇文章。后台正在翻译中...`);
+        setPage(1);
+        await fetchArticles(activeCategory, 1);
+        setTimeout(() => {
+          fetchArticles(activeCategory, 1);
+          setFetchMsg('');
+        }, 30000);
+      } else {
+        setFetchMsg(`抓取失败：${json.error || '未知错误'}`);
+        setTimeout(() => setFetchMsg(''), 5000);
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setFetchMsg('抓取超时，请稍后重试');
+      } else {
+        setFetchMsg('抓取出错，请检查网络连接');
+      }
+      setTimeout(() => setFetchMsg(''), 5000);
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  return (
+    <MainLayout>
+      <div className="flex gap-6">
+        {/* 主内容区 */}
+        <div className="flex-1 min-w-0">
+          {/* 分类 Tab + 手动抓取 */}
+          <div className="mb-6 flex items-center gap-3">
+            <div
+              className="flex flex-1 gap-1 overflow-x-auto pb-2"
+              style={{ scrollbarWidth: 'none' }}
+            >
+              {categories.map((cat) => (
+                <button
+                  key={cat.key}
+                  onClick={() => setActiveCategory(cat.key)}
+                  className={clsx(
+                    'relative whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-colors',
+                  )}
+                  style={{
+                    color: activeCategory === cat.key ? 'var(--accent)' : 'var(--text-secondary)',
+                    backgroundColor: activeCategory === cat.key ? 'var(--glow)' : 'transparent',
+                  }}
+                >
+                  {cat.label}
+                  {activeCategory === cat.key && (
+                    <span
+                      className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full"
+                      style={{
+                        width: 20,
+                        height: 2,
+                        backgroundColor: 'var(--accent)',
+                      }}
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+            {/* 筛选 */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all"
+              style={{
+                backgroundColor: (filterImportance || filterSentiment || filterTimeRange) ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                color: (filterImportance || filterSentiment || filterTimeRange) ? 'var(--accent)' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <SlidersHorizontal size={14} />
+              筛选
+            </button>
+            {/* 语言切换 */}
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={() => setShowLangMenu(!showLangMenu)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <Globe size={14} />
+                {langOptions.find(l => l.key === displayLang)?.label}
+                <ChevronDown size={12} />
+              </button>
+              {showLangMenu && (
+                <div
+                  className="absolute right-0 top-full z-20 mt-1 min-w-[100px] rounded-lg py-1"
+                  style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                >
+                  {langOptions.map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => { setDisplayLang(opt.key); setShowLangMenu(false); }}
+                      className="block w-full px-4 py-1.5 text-left text-xs transition-colors"
+                      style={{
+                        color: opt.key === displayLang ? 'var(--accent)' : 'var(--text-secondary)',
+                        backgroundColor: 'transparent',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* 手动抓取 */}
+            <button
+              onClick={handleManualFetch}
+              disabled={fetching}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all disabled:opacity-60"
+              style={{
+                backgroundColor: fetching ? 'var(--bg-hover)' : 'var(--bg-secondary)',
+                color: fetching ? 'var(--accent)' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+              title="手动抓取所有 RSS 源"
+            >
+              {fetching ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              {fetching ? '抓取中...' : '抓取'}
+            </button>
+          </div>
+
+          {/* 筛选面板 */}
+          {showFilters && (
+            <div
+              className="mb-4 animate-fade-in rounded-xl p-4"
+              style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+            >
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--text-secondary)' }}>时间范围</label>
+                  <select
+                    value={filterTimeRange}
+                    onChange={e => setFilterTimeRange(e.target.value)}
+                    className="rounded-lg px-3 py-1.5 text-xs outline-none"
+                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                  >
+                    <option value="">全部</option>
+                    <option value="today">今天</option>
+                    <option value="week">本周</option>
+                    <option value="month">本月</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--text-secondary)' }}>重要性</label>
+                  <select
+                    value={filterImportance}
+                    onChange={e => setFilterImportance(e.target.value)}
+                    className="rounded-lg px-3 py-1.5 text-xs outline-none"
+                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                  >
+                    <option value="">全部</option>
+                    <option value="breaking">突发</option>
+                    <option value="important">重要</option>
+                    <option value="normal">普通</option>
+                    <option value="low">低</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--text-secondary)' }}>情感</label>
+                  <select
+                    value={filterSentiment}
+                    onChange={e => setFilterSentiment(e.target.value)}
+                    className="rounded-lg px-3 py-1.5 text-xs outline-none"
+                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                  >
+                    <option value="">全部</option>
+                    <option value="positive">正面</option>
+                    <option value="neutral">中性</option>
+                    <option value="negative">负面</option>
+                  </select>
+                </div>
+                {(filterImportance || filterSentiment || filterTimeRange) && (
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => { setFilterImportance(''); setFilterSentiment(''); setFilterTimeRange(''); }}
+                      className="rounded-lg px-3 py-1.5 text-xs"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      清除筛选
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 抓取状态提示 */}
+          {fetchMsg && (
+            <div
+              className="mb-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm animate-fade-in"
+              style={{
+                backgroundColor: fetchMsg.includes('完成') ? 'rgba(0,230,118,0.1)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.1)' : 'rgba(0,230,118,0.05)',
+                color: fetchMsg.includes('完成') ? 'var(--accent)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'var(--danger)' : 'var(--text-secondary)',
+                border: `1px solid ${fetchMsg.includes('完成') ? 'rgba(0,230,118,0.2)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
+              }}
+            >
+              {fetching && <Loader2 size={14} className="animate-spin flex-shrink-0" />}
+              {fetchMsg}
+            </div>
+          )}
+
+          {/* 文章列表 */}
+          {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : articles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Newspaper size={48} style={{ color: 'var(--text-disabled)' }} />
+              <p className="mt-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                暂无新闻，点击下方按钮手动抓取
+              </p>
+              <button
+                onClick={handleManualFetch}
+                disabled={fetching}
+                className="mt-4 flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-opacity disabled:opacity-50"
+                style={{
+                  backgroundColor: 'var(--accent)',
+                  color: 'var(--bg-primary)',
+                }}
+              >
+                {fetching ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={16} />
+                )}
+                {fetching ? '抓取中...' : '手动抓取'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {articles.map((article) => (
+                  <ArticleCard key={article.id} article={article} displayLang={displayLang} />
+                ))}
+              </div>
+
+              {hasMore && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    {loadingMore ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : null}
+                    {loadingMore ? '加载中...' : '加载更多'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* 右侧面板 */}
+        <div className="hidden lg:block" style={{ width: 320, flexShrink: 0 }}>
+          <div
+            className="sticky rounded-xl p-5"
+            style={{
+              top: 88,
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <h2
+              className="mb-4 flex items-center gap-2 text-sm font-semibold"
+              style={{ color: 'var(--accent)' }}
+            >
+              <Calendar size={16} />
+              Today&apos;s Digest
+            </h2>
+
+            {digest ? (
+              <div>
+                <p className="mb-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {digest.date}
+                </p>
+                <p className="mb-3 text-sm" style={{ color: 'var(--text-primary)' }}>
+                  {digest.title || `包含 ${digest.headline_count} 条头条新闻`}
+                </p>
+                <Link
+                  href="/digest"
+                  className="flex items-center gap-1 text-sm font-medium transition-opacity hover:opacity-80"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  查看完整 Digest
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                暂无 Digest，AI 正在为你整理今日要闻...
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </MainLayout>
+  );
+}
