@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAndStoreFullContent } from '@/lib/services/readability';
+import { queryOne } from '@/lib/db/schema';
 
 export async function POST(
   _req: NextRequest,
@@ -7,11 +8,26 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const article = await fetchAndStoreFullContent(id);
+    const success = await fetchAndStoreFullContent(id);
+
+    if (!success) {
+      return NextResponse.json(
+        { success: false, error: '无法抓取全文内容' },
+        { status: 400 }
+      );
+    }
+
+    const article = await queryOne(
+      'SELECT id, title, content, full_content FROM articles WHERE id = $1',
+      [id]
+    );
 
     return NextResponse.json({
       success: true,
-      data: article,
+      data: {
+        id,
+        content: (article as Record<string, unknown>)?.full_content || (article as Record<string, unknown>)?.content || '',
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';

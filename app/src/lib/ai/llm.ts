@@ -23,7 +23,7 @@ export async function callLLM(
   systemPrompt?: string
 ): Promise<string> {
   if (MOCK_MODE) {
-    return '';
+    return generateMockResponse(prompt, systemPrompt || '');
   }
 
   const messages: ChatMessage[] = [];
@@ -236,4 +236,56 @@ function extractJson(text: string): Record<string, unknown> {
     throw new Error('No JSON found in LLM response: ' + text.slice(0, 200));
   }
   return JSON.parse(match[0]) as Record<string, unknown>;
+}
+
+function generateMockResponse(prompt: string, systemPrompt: string): string {
+  if (systemPrompt.includes('新闻主播') || systemPrompt.includes('播报')) {
+    const lines = prompt.split('\n').filter(l => l.trim().length > 10).slice(0, 8);
+    return `[段落1] 各位听众朋友大家好，欢迎收听今日全球资讯速览。以下是今天的重要新闻。\n\n[段落2] ${lines[0] || '今天全球各地发生了多件值得关注的事件。'}\n\n[段落3] ${lines[1] || '科技领域也有新的进展。'}\n\n[段落4] ${lines[2] || '财经方面，市场表现值得关注。'}\n\n[段落5] 以上就是今天的全球资讯速览，感谢您的收听，祝您阅读愉快。`;
+  }
+
+  if (systemPrompt.includes('小红书')) {
+    const contentPreview = prompt.slice(0, 200);
+    return `🔥 今日全球资讯速递！不看你就OUT了！\n\n📌 要点速览：\n${contentPreview}\n\n💡 每天5分钟，掌握全球大事！\n\n#全球资讯 #科技前沿 #每日必读 #AI时代 #新闻速递\n\n你对今天的新闻怎么看？欢迎评论区讨论～`;
+  }
+
+  if (systemPrompt.includes('朋友圈')) {
+    const contentPreview = prompt.slice(0, 200);
+    return `📰 今日全球要闻速览\n\n${contentPreview}\n\n—— 来自「一念三千」AI 资讯聚合`;
+  }
+
+  if (systemPrompt.includes('translator') || systemPrompt.includes('翻译')) {
+    const paragraphMatch = prompt.match(/\[\d+\]\s*(.+)/g);
+    if (paragraphMatch) {
+      const items = paragraphMatch.map((p) => {
+        const text = p.replace(/^\[\d+\]\s*/, '').trim();
+        return { original: text, translated: `[翻译] ${text}` };
+      });
+      return JSON.stringify(items);
+    }
+    return '[]';
+  }
+
+  if (systemPrompt.includes('classification') || systemPrompt.includes('Classify')) {
+    return '{"topic": "general", "region": "global", "importance": "normal", "sentiment": "neutral"}';
+  }
+
+  if (systemPrompt.includes('趋势') || systemPrompt.includes('关键词')) {
+    const words = prompt.split(/[\s\n]+/).filter(w => w.length >= 3 && w.length <= 20);
+    const wordCount: Record<string, number> = {};
+    for (const w of words) {
+      const clean = w.replace(/[^\w\u4e00-\u9fff]/g, '');
+      if (clean.length >= 2) wordCount[clean] = (wordCount[clean] || 0) + 1;
+    }
+    const sorted = Object.entries(wordCount).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    return JSON.stringify(sorted.map(([keyword, count]) => ({ keyword, count, trend: 'stable' })));
+  }
+
+  if (systemPrompt.includes('digest') || systemPrompt.includes('Digest')) {
+    const items = prompt.split('\n').filter(l => l.startsWith('- ')).slice(0, 10);
+    const itemsText = items.length > 0 ? items.map((it, i) => `${i + 1}. ${it.replace(/^- /, '')}`).join('\n') : '暂无新闻数据';
+    return `# 📰 每日资讯速递\n\n## 🔥 今日头条\n\n${itemsText}\n\n## 📊 今日数据\n\n- 收录新闻若干条\n- 覆盖多个信息源`;
+  }
+
+  return `[Mock] ${prompt.slice(0, 300)}`;
 }

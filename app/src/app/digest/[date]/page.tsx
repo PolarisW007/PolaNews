@@ -58,6 +58,8 @@ export default function DigestDetailPage() {
     });
   };
 
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
   const handleExport = () => {
     if (!digest) return;
     const content = digest.full_content || `# ${digest.digest_date} Daily Digest\n\nNo content available.`;
@@ -68,6 +70,13 @@ export default function DigestDetailPage() {
     a.download = `digest-${digest.digest_date}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = () => {
+    if (!digest) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const url = `${basePath}/api/digests/${digest.id}/export?format=pdf${token ? `&token=${token}` : ''}`;
+    window.open(url, '_blank');
   };
 
   const importanceColors: Record<string, { bg: string; text: string }> = {
@@ -159,6 +168,18 @@ export default function DigestDetailPage() {
             >
               <Download size={14} />
               导出 Markdown
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
+              style={{
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <FileText size={14} />
+              导出 PDF
             </button>
           </div>
         </div>
@@ -363,7 +384,7 @@ export default function DigestDetailPage() {
 
         {/* 底部导出 */}
         <div
-          className="flex justify-center border-t py-8"
+          className="flex justify-center gap-3 border-t py-8"
           style={{ borderColor: 'var(--border)' }}
         >
           <button
@@ -377,6 +398,18 @@ export default function DigestDetailPage() {
           >
             <Download size={16} />
             导出为 Markdown
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-colors"
+            style={{
+              background: 'var(--bg-secondary)',
+              color: 'var(--accent)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <FileText size={16} />
+            导出为 PDF
           </button>
         </div>
       </div>

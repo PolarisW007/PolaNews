@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Play,
-  Pause,
   Loader2,
   Calendar,
   Globe,
@@ -14,6 +12,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
+import BroadcastPlayer from '@/components/ui/BroadcastPlayer';
 import { api } from '@/lib/api-client';
 import { useToast } from '@/components/ui/Toast';
 
@@ -44,10 +43,8 @@ export default function BroadcastDetailPage() {
   const [broadcast, setBroadcast] = useState<Broadcast | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [speed, setSpeed] = useState(1);
-  const [showTip, setShowTip] = useState(false);
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   const fetchBroadcast = useCallback(async () => {
     setLoading(true);
@@ -81,34 +78,7 @@ export default function BroadcastDetailPage() {
     return `${mins}:${String(secs).padStart(2, '0')}`;
   };
 
-  const handlePlayToggle = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      toast('当前浏览器不支持语音合成', 'error');
-      return;
-    }
-    if (isPlaying) {
-      window.speechSynthesis.cancel();
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(true);
-      const text = segments.length > 0 ? segments.map(s => s.text).join('\n\n') : broadcast?.script || '';
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = speed;
-      utterance.lang = broadcast?.language === 'en' ? 'en-US' : broadcast?.language === 'ja' ? 'ja-JP' : 'zh-CN';
-      utterance.onend = () => { setIsPlaying(false); setProgress(100); };
-      const estimatedDuration = text.length * 120 / speed;
-      let elapsed = 0;
-      const interval = setInterval(() => {
-        elapsed += 200;
-        setProgress(Math.min((elapsed / estimatedDuration) * 100, 99));
-        if (!window.speechSynthesis.speaking) clearInterval(interval);
-      }, 200);
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
   const langLabels: Record<string, string> = { zh: '中文', en: 'English', ja: '日本語' };
-  const speeds = [0.75, 1, 1.25, 1.5, 2];
 
   if (loading) {
     return (
@@ -145,7 +115,7 @@ export default function BroadcastDetailPage() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-3xl" style={{ paddingBottom: showPlayer ? 120 : 0 }}>
         <button
           onClick={() => router.push('/broadcast')}
           className="mb-6 flex items-center gap-2 text-sm transition-colors hover:underline"
@@ -179,29 +149,52 @@ export default function BroadcastDetailPage() {
           </div>
         </div>
 
+        {/* Tip & Play trigger */}
+        {!showPlayer && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowPlayer(true)}
+              className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110"
+              style={{ background: 'var(--accent)' }}
+            >
+              <Info size={16} />
+              打开播放器
+            </button>
+          </div>
+        )}
+
         {/* Segments */}
         <div className="mb-6 space-y-4">
           {segments.length > 0 ? (
-            segments.map((seg) => (
-              <div
-                key={seg.index}
-                className="rounded-xl border p-5"
-                style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-              >
-                <h3
-                  className="mb-3 text-sm font-semibold"
-                  style={{ color: 'var(--accent)' }}
+            segments.map((seg, idx) => {
+              const isActive = showPlayer && idx === activeSegmentIndex;
+              return (
+                <div
+                  key={seg.index}
+                  id={`segment-${idx}`}
+                  className="rounded-xl border p-5 transition-all duration-300"
+                  style={{
+                    background: isActive ? 'rgba(0,230,118,0.06)' : 'var(--bg-secondary)',
+                    borderColor: isActive ? 'var(--accent)' : 'var(--border)',
+                    borderLeftWidth: isActive ? 4 : 1,
+                    borderLeftColor: isActive ? 'var(--accent)' : 'var(--border)',
+                  }}
                 >
-                  段落 {seg.index}
-                </h3>
-                <p
-                  className="whitespace-pre-wrap text-sm leading-relaxed"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {seg.text}
-                </p>
-              </div>
-            ))
+                  <h3
+                    className="mb-3 text-sm font-semibold"
+                    style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
+                  >
+                    段落 {seg.index} {isActive && '▶ 正在播放'}
+                  </h3>
+                  <p
+                    className="whitespace-pre-wrap text-sm leading-relaxed"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {seg.text}
+                  </p>
+                </div>
+              );
+            })
           ) : (
             <div
               className="rounded-xl border p-5"
@@ -216,81 +209,25 @@ export default function BroadcastDetailPage() {
             </div>
           )}
         </div>
-
-        {/* Player UI */}
-        <div
-          className="sticky bottom-6 rounded-xl border p-5"
-          style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-        >
-          {showTip && (
-            <div
-              className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
-              style={{ background: 'rgba(255,152,0,0.1)', color: '#FFB74D' }}
-            >
-              <Info size={14} />
-              TTS 音频功能需配置 CosyVoice API
-            </div>
-          )}
-
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handlePlayToggle}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110"
-              style={{ background: 'var(--accent)' }}
-            >
-              {isPlaying ? (
-                <Pause size={18} className="text-black" />
-              ) : (
-                <Play size={18} className="ml-0.5 text-black" />
-              )}
-            </button>
-
-            <div className="flex-1">
-              <div
-                className="h-1.5 w-full cursor-pointer overflow-hidden rounded-full"
-                style={{ background: 'var(--border)' }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = ((e.clientX - rect.left) / rect.width) * 100;
-                  setProgress(Math.min(100, Math.max(0, pct)));
-                }}
-              >
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${progress}%`, background: 'var(--accent)' }}
-                />
-              </div>
-              <div
-                className="mt-1 flex justify-between text-xs"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                <span>
-                  {formatDuration(
-                    Math.floor((broadcast.total_duration_ms * progress) / 100)
-                  )}
-                </span>
-                <span>{formatDuration(broadcast.total_duration_ms)}</span>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1">
-              {speeds.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSpeed(s)}
-                  className="rounded px-2 py-1 text-xs font-medium transition-colors"
-                  style={{
-                    background: speed === s ? 'var(--accent)' : 'transparent',
-                    color: speed === s ? '#000' : 'var(--text-secondary)',
-                  }}
-                >
-                  {s}x
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* BroadcastPlayer 组件 */}
+      {showPlayer && (
+        <BroadcastPlayer
+          script={broadcast.script}
+          segments={segments}
+          title={`${broadcast.broadcast_date} 新闻播报`}
+          onSegmentChange={(index) => {
+            setActiveSegmentIndex(index);
+            const el = document.getElementById(`segment-${index}`);
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+          onClose={() => {
+            setShowPlayer(false);
+            setActiveSegmentIndex(0);
+          }}
+        />
+      )}
     </MainLayout>
   );
 }

@@ -1,6 +1,26 @@
 import { query } from '../db/schema';
 import { callLLM } from '../ai/llm';
 
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'dare', 'ought',
+  'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+  'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
+  'between', 'out', 'off', 'over', 'under', 'again', 'further', 'then',
+  'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'both',
+  'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
+  'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just',
+  'because', 'but', 'and', 'or', 'if', 'while', 'about', 'up', 'its',
+  'it', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'whom',
+  'his', 'her', 'their', 'our', 'your', 'my', 'we', 'they', 'he', 'she',
+  'me', 'him', 'us', 'them', 'you', 'new', 'says', 'said', 'get', 'got',
+  'also', 'like', 'even', 'way', 'see', 'now', 'first', 'two', 'one',
+  'make', 'after', 'use', 'how', 'our', 'free', 'watch', 'every',
+  '的', '了', '在', '是', '和', '我', '有', '他', '这', '中',
+  '人', '大', '为', '上', '个', '国', '不', '以', '会', '与',
+]);
+
 export interface TrendingKeyword {
   keyword: string;
   count: number;
@@ -43,7 +63,7 @@ export async function extractTrendingKeywords(hours = 24): Promise<TrendingKeywo
 
   const wordCount: Record<string, number> = {};
   for (const a of articles) {
-    const words = (a.title_zh || a.title).split(/[\s,，.。!！?？;；:：、]+/).filter(w => w.length >= 2);
+    const words = (a.title_zh || a.title).split(/[\s,，.。!！?？;；:：、\-\(\)\[\]"'""'']+/).filter(w => w.length >= 2 && !STOP_WORDS.has(w.toLowerCase()));
     for (const w of words) {
       wordCount[w] = (wordCount[w] || 0) + 1;
     }

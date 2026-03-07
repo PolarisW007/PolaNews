@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { Search, Loader2, X } from 'lucide-react';
+import { Search, Loader2, X, Clock, Sparkles } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
 import { api } from '@/lib/api-client';
 import { useToast } from '@/components/ui/Toast';
@@ -35,6 +35,25 @@ function highlightText(text: string, keyword: string) {
   ).join('');
 }
 
+type SearchMode = 'keyword' | 'semantic';
+
+const SEARCH_HISTORY_KEY = 'search_history';
+const MAX_HISTORY = 5;
+
+function getSearchHistory(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+  } catch { return []; }
+}
+
+function addSearchHistory(q: string) {
+  if (typeof window === 'undefined' || !q.trim()) return;
+  const history = getSearchHistory().filter(h => h !== q);
+  history.unshift(q);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+}
+
 export default function SearchPage() {
   const { toast } = useToast();
   const [query, setQuery] = useState('');
@@ -43,25 +62,49 @@ export default function SearchPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [searchMode, setSearchMode] = useState<SearchMode>('keyword');
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const limit = 20;
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   useEffect(() => {
     inputRef.current?.focus();
+    setSearchHistory(getSearchHistory());
   }, []);
+
+  const doKeywordSearch = useCallback(async (q: string, p: number) => {
+    const data = await api.articles.search({ q, page: p, limit }) as SearchResult;
+    return data;
+  }, []);
+
+  const doSemanticSearch = useCallback(async (q: string, p: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const qs = new URLSearchParams({ q, page: String(p), limit: String(limit) });
+    const res = await fetch(`${basePath}/api/articles/semantic-search?${qs.toString()}`, { headers });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || '语义搜索失败');
+    return json.data as SearchResult;
+  }, [basePath]);
 
   const doSearch = useCallback(async (q: string, p: number) => {
     if (!q.trim()) return;
     setLoading(true);
     setSearched(true);
     try {
-      const data = await api.articles.search({ q, page: p, limit }) as SearchResult;
-      if (p === 1) setArticles(data.articles);
-      else setArticles(prev => [...prev, ...data.articles]);
-      setTotal(data.total);
+      const data = searchMode === 'semantic'
+        ? await doSemanticSearch(q, p)
+        : await doKeywordSearch(q, p);
+      if (p === 1) setArticles(data.articles || []);
+      else setArticles(prev => [...prev, ...(data.articles || [])]);
+      setTotal(data.total || 0);
+      addSearchHistory(q);
+      setSearchHistory(getSearchHistory());
     } catch (e) { toast(e instanceof Error ? e.message : '搜索失败，请重试', 'error'); }
     setLoading(false);
-  }, [toast]);
+  }, [toast, searchMode, doKeywordSearch, doSemanticSearch]);
 
   const handleSearch = () => {
     setPage(1);
@@ -71,6 +114,18 @@ export default function SearchPage() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
+  };
+
+  const handleHistoryClick = (q: string) => {
+    setQuery(q);
+    setPage(1);
+    setArticles([]);
+    doSearch(q, 1);
+  };
+
+  const clearHistory = () => {
+    if (typeof window !== 'undefined') localStorage.removeItem(SEARCH_HISTORY_KEY);
+    setSearchHistory([]);
   };
 
   useEffect(() => {
@@ -117,6 +172,66 @@ export default function SearchPage() {
               搜索
             </button>
           </div>
+          {/* 搜索模式切换 */}
+          <div
+            className="mt-3 flex items-center gap-4"
+          >
+            <div
+              className="flex gap-1 rounded-lg p-1"
+              style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+            >
+              <button
+                onClick={() => { setSearchMode('keyword'); setArticles([]); setSearched(false); }}
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{
+                  backgroundColor: searchMode === 'keyword' ? 'var(--bg-hover)' : 'transparent',
+                  color: searchMode === 'keyword' ? 'var(--accent)' : 'var(--text-secondary)',
+                }}
+              >
+                <Search size={12} />
+                关键词搜索
+              </button>
+              <button
+                onClick={() => { setSearchMode('semantic'); setArticles([]); setSearched(false); }}
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{
+                  backgroundColor: searchMode === 'semantic' ? 'var(--bg-hover)' : 'transparent',
+                  color: searchMode === 'semantic' ? 'var(--accent)' : 'var(--text-secondary)',
+                }}
+              >
+                <Sparkles size={12} />
+                语义搜索
+              </button>
+            </div>
+          </div>
+
+          {/* 搜索历史 */}
+          {searchHistory.length > 0 && !searched && (
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <Clock size={12} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+              {searchHistory.map((h, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleHistoryClick(h)}
+                  className="rounded-full px-3 py-1 text-xs transition-colors"
+                  style={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {h}
+                </button>
+              ))}
+              <button
+                onClick={clearHistory}
+                className="text-xs transition-colors"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                清除
+              </button>
+            </div>
+          )}
         </div>
 
         {!searched && !loading && (

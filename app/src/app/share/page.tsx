@@ -11,6 +11,8 @@ import {
   BookOpen,
   MessageCircle,
   Filter,
+  RefreshCw,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
@@ -59,6 +61,7 @@ export default function ShareHistoryPage() {
   const [copied, setCopied] = useState(false);
 
   const [generating, setGenerating] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [modalPlatform, setModalPlatform] = useState<'xiaohongshu' | 'wechat_moments'>('xiaohongshu');
   const [digests, setDigests] = useState<Digest[]>([]);
   const [selectedDigestId, setSelectedDigestId] = useState('');
@@ -115,9 +118,29 @@ export default function ShareHistoryPage() {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast('文案已复制到剪贴板', 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback
+      toast('复制失败，请手动选择复制', 'error');
+    }
+  };
+
+  const handleRegenerate = async (share: SocialShare) => {
+    setRegenerating(true);
+    try {
+      await api.shares.generate(
+        share.platform,
+        share.digest_id || undefined,
+        share.article_id || undefined,
+        share.language || 'zh',
+      );
+      await fetchShares();
+      setDetailShare(null);
+      toast('已重新生成分享文案', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '重新生成失败', 'error');
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -241,6 +264,51 @@ export default function ShareHistoryPage() {
                     >
                       {share.content?.slice(0, 120)}
                     </p>
+
+                    {/* 封面图预览 */}
+                    {share.cover_url && (
+                      <div className="mt-2">
+                        <img
+                          src={share.cover_url}
+                          alt="封面"
+                          className="h-20 w-32 rounded-lg object-cover"
+                        />
+                      </div>
+                    )}
+
+                    {/* 图片缩略图 */}
+                    {share.images && (() => {
+                      try {
+                        const imgs = JSON.parse(share.images) as string[];
+                        if (imgs.length > 0) {
+                          return (
+                            <div className="mt-2 flex gap-1.5 overflow-hidden">
+                              {imgs.slice(0, 4).map((img, i) => (
+                                <img
+                                  key={i}
+                                  src={img}
+                                  alt=""
+                                  className="h-12 w-12 rounded object-cover"
+                                  style={{ border: '1px solid var(--border)' }}
+                                />
+                              ))}
+                              {imgs.length > 4 && (
+                                <div
+                                  className="flex h-12 w-12 items-center justify-center rounded text-xs"
+                                  style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                                >
+                                  +{imgs.length - 4}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      } catch {
+                        return null;
+                      }
+                    })()}
+
                     <span
                       className="mt-2 inline-block text-xs"
                       style={{ color: 'var(--text-secondary)' }}
@@ -293,8 +361,20 @@ export default function ShareHistoryPage() {
                 {detailShare.title || '无标题'}
               </h2>
 
+              {/* 封面图 */}
+              {detailShare.cover_url && (
+                <div className="mb-4 overflow-hidden rounded-lg">
+                  <img
+                    src={detailShare.cover_url}
+                    alt="封面"
+                    className="w-full rounded-lg object-cover"
+                    style={{ maxHeight: 240 }}
+                  />
+                </div>
+              )}
+
               <div
-                className="mb-5 whitespace-pre-wrap rounded-lg border p-4 text-sm leading-relaxed"
+                className="mb-4 whitespace-pre-wrap rounded-lg border p-4 text-sm leading-relaxed"
                 style={{
                   background: 'var(--bg-primary)',
                   borderColor: 'var(--border)',
@@ -304,14 +384,60 @@ export default function ShareHistoryPage() {
                 {detailShare.content}
               </div>
 
-              <button
-                onClick={() => handleCopy(detailShare.content)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110"
-                style={{ background: 'var(--accent)' }}
-              >
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-                {copied ? '已复制' : '一键复制文案'}
-              </button>
+              {/* 图片缩略图 */}
+              {detailShare.images && (() => {
+                try {
+                  const imgs = JSON.parse(detailShare.images) as string[];
+                  if (imgs.length > 0) {
+                    return (
+                      <div className="mb-5">
+                        <div className="mb-2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          <ImageIcon size={12} />
+                          配图 ({imgs.length})
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {imgs.map((img, i) => (
+                            <img
+                              key={i}
+                              src={img}
+                              alt=""
+                              className="aspect-square w-full rounded-lg object-cover"
+                              style={{ border: '1px solid var(--border)' }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                } catch {
+                  return null;
+                }
+              })()}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleCopy(detailShare.content)}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                  {copied ? '已复制' : '一键复制文案'}
+                </button>
+                <button
+                  onClick={() => handleRegenerate(detailShare)}
+                  disabled={regenerating}
+                  className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all hover:brightness-110"
+                  style={{
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {regenerating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                  重新生成
+                </button>
+              </div>
             </div>
           </div>
         )}

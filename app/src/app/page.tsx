@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { RefreshCw, Loader2, Newspaper, ArrowRight, Calendar, Globe, ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, Loader2, Newspaper, ArrowRight, Calendar, Globe, ChevronDown, SlidersHorizontal, List, LayoutGrid, BookOpen } from 'lucide-react';
 import { clsx } from 'clsx';
 import MainLayout from '@/components/layout/MainLayout';
 import { useToast } from '@/components/ui/Toast';
@@ -26,6 +26,7 @@ interface Article {
 }
 
 type DisplayLang = 'zh' | 'en' | 'original';
+type ViewMode = 'card' | 'list' | 'magazine';
 
 interface Digest {
   id: string;
@@ -153,6 +154,142 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
   );
 }
 
+function ArticleListItem({ article, displayLang }: { article: Article; displayLang: DisplayLang }) {
+  const timeAgo = formatDistanceToNow(new Date(article.published_at || article.created_at), {
+    addSuffix: true,
+    locale: zhCN,
+  });
+  const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
+
+  return (
+    <Link href={`/article/${article.id}`}>
+      <div
+        className="animate-fade-in flex items-center gap-3 rounded-lg px-4 py-3 transition-colors cursor-pointer"
+        style={{
+          backgroundColor: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+        }}
+      >
+        <h3
+          className="flex-1 truncate text-sm font-medium"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {displayTitle}
+        </h3>
+        <span className="flex-shrink-0 text-xs" style={{ color: 'var(--accent-secondary)' }}>
+          {article.feed_title}
+        </span>
+        <span className="flex-shrink-0 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          {timeAgo}
+        </span>
+        {article.category && (
+          <span
+            className="flex-shrink-0 rounded-full px-2 py-0.5 text-xs"
+            style={{ backgroundColor: 'var(--glow)', color: 'var(--accent)' }}
+          >
+            {article.category}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function ArticleMagazineHero({ article, displayLang }: { article: Article; displayLang: DisplayLang }) {
+  const timeAgo = formatDistanceToNow(new Date(article.published_at || article.created_at), {
+    addSuffix: true,
+    locale: zhCN,
+  });
+  const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
+  const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
+  const truncatedSummary = rawSummary
+    ? rawSummary.length > 200 ? rawSummary.slice(0, 200) + '...' : rawSummary
+    : '';
+
+  return (
+    <Link href={`/article/${article.id}`}>
+      <div
+        className="glow-border animate-fade-in cursor-pointer overflow-hidden rounded-xl transition-colors"
+        style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+      >
+        {article.cover_image && (
+          <img
+            src={article.cover_image}
+            alt=""
+            className="w-full object-cover"
+            style={{ height: 280 }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+        <div className="p-6">
+          <h3 className="mb-3 text-xl font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+            {displayTitle}
+          </h3>
+          <div className="mb-3 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            {article.favicon_url && (
+              <img src={article.favicon_url} alt="" className="h-4 w-4 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            )}
+            <span>{article.feed_title}</span>
+            <span>·</span>
+            <span>{timeAgo}</span>
+          </div>
+          {truncatedSummary && (
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              {truncatedSummary}
+            </p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ArticleMagazineSmall({ article, displayLang }: { article: Article; displayLang: DisplayLang }) {
+  const timeAgo = formatDistanceToNow(new Date(article.published_at || article.created_at), {
+    addSuffix: true,
+    locale: zhCN,
+  });
+  const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
+  const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
+  const truncatedSummary = rawSummary
+    ? rawSummary.length > 80 ? rawSummary.slice(0, 80) + '...' : rawSummary
+    : '';
+
+  return (
+    <Link href={`/article/${article.id}`}>
+      <div
+        className="glow-border animate-fade-in cursor-pointer overflow-hidden rounded-xl transition-colors"
+        style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+      >
+        {article.cover_image && (
+          <img
+            src={article.cover_image}
+            alt=""
+            className="w-full object-cover"
+            style={{ height: 140 }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+        <div className="p-4">
+          <h3 className="mb-2 text-sm font-semibold leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+            {displayTitle}
+          </h3>
+          <div className="mb-2 flex items-center gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            <span>{article.feed_title}</span>
+            <span>·</span>
+            <span>{timeAgo}</span>
+          </div>
+          {truncatedSummary && (
+            <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'var(--text-secondary)' }}>
+              {truncatedSummary}
+            </p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function HomePage() {
   const { toast } = useToast();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -163,6 +300,7 @@ export default function HomePage() {
   const [hasMore, setHasMore] = useState(true);
   const [digest, setDigest] = useState<Digest | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [displayLang, setDisplayLang] = useState<DisplayLang>('zh');
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -318,6 +456,30 @@ export default function HomePage() {
                       }}
                     />
                   )}
+                </button>
+              ))}
+            </div>
+            {/* 视图模式切换 */}
+            <div
+              className="flex flex-shrink-0 gap-0.5 rounded-lg p-0.5"
+              style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+            >
+              {([
+                { key: 'list' as ViewMode, icon: <List size={14} />, title: '列表模式' },
+                { key: 'card' as ViewMode, icon: <LayoutGrid size={14} />, title: '卡片模式' },
+                { key: 'magazine' as ViewMode, icon: <BookOpen size={14} />, title: '杂志模式' },
+              ]).map(({ key, icon, title }) => (
+                <button
+                  key={key}
+                  onClick={() => setViewMode(key)}
+                  title={title}
+                  className="rounded-md p-1.5 transition-colors"
+                  style={{
+                    backgroundColor: viewMode === key ? 'var(--bg-hover)' : 'transparent',
+                    color: viewMode === key ? 'var(--accent)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {icon}
                 </button>
               ))}
             </div>
@@ -505,11 +667,38 @@ export default function HomePage() {
             </div>
           ) : (
             <>
-              <div className="space-y-4">
-                {articles.map((article) => (
-                  <ArticleCard key={article.id} article={article} displayLang={displayLang} />
-                ))}
-              </div>
+              {viewMode === 'list' && (
+                <div className="space-y-2">
+                  {articles.map((article) => (
+                    <ArticleListItem key={article.id} article={article} displayLang={displayLang} />
+                  ))}
+                </div>
+              )}
+
+              {viewMode === 'card' && (
+                <div className="space-y-4">
+                  {articles.map((article) => (
+                    <ArticleCard key={article.id} article={article} displayLang={displayLang} />
+                  ))}
+                </div>
+              )}
+
+              {viewMode === 'magazine' && (
+                <div>
+                  {articles.length > 0 && (
+                    <div className="mb-4">
+                      <ArticleMagazineHero article={articles[0]} displayLang={displayLang} />
+                    </div>
+                  )}
+                  {articles.length > 1 && (
+                    <div className="grid grid-cols-2 gap-4">
+                      {articles.slice(1).map((article) => (
+                        <ArticleMagazineSmall key={article.id} article={article} displayLang={displayLang} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {hasMore && (
                 <div className="mt-6 flex justify-center">

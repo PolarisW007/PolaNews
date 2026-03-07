@@ -11,6 +11,9 @@ import {
   Loader2,
   CheckCircle,
   Languages,
+  Volume2,
+  VolumeX,
+  Share2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import clsx from 'clsx';
@@ -47,6 +50,8 @@ export default function ArticlePage() {
   const [bilingualMode, setBilingualMode] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translatedParagraphs, setTranslatedParagraphs] = useState<{ original: string; translated: string }[]>([]);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -57,8 +62,73 @@ export default function ArticlePage() {
       setStarred(!!art.is_starred);
       setSaved(!!art.is_saved);
       api.articles.markRead(id).catch(() => {});
+
+      if (art.categories?.topic) {
+        api.articles.list({ category: art.categories.topic, limit: 6 })
+          .then((res) => {
+            const list = ((res as { articles?: Article[] }).articles || [])
+              .filter((a) => a.id !== art.id)
+              .slice(0, 5);
+            setRelatedArticles(list);
+          })
+          .catch(() => {});
+      }
     }).catch(() => { toast('加载文章失败', 'error'); }).finally(() => setLoading(false));
   }, [id, toast]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+    };
+  }, []);
+
+  const handleTTS = () => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      toast('当前浏览器不支持语音朗读', 'error');
+      return;
+    }
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const text = article?.ai_summary || article?.summary || article?.content?.replace(/<[^>]*>/g, '') || '';
+    if (!text.trim()) {
+      toast('没有可朗读的内容', 'info');
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
+    utterance.lang = 'zh-CN';
+    utterance.rate = 1;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleShare = async () => {
+    if (!article) return;
+    const shareData = {
+      title: article.title,
+      text: article.ai_summary || article.summary || '',
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast('链接已复制到剪贴板', 'success');
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast('链接已复制到剪贴板', 'success');
+      } catch {
+        toast('分享失败', 'error');
+      }
+    }
+  };
 
   const currentSummary = article
     ? summaryLang === 'en'
@@ -174,12 +244,27 @@ export default function ArticlePage() {
             返回
           </button>
 
-          <h1
-            className="mb-4 text-2xl font-semibold leading-tight md:text-3xl"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {article.title}
-          </h1>
+          <div className="mb-4 flex items-start gap-3">
+            <h1
+              className="flex-1 text-2xl font-semibold leading-tight md:text-3xl"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {article.title}
+            </h1>
+            <button
+              onClick={handleTTS}
+              className="mt-1 flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors"
+              style={{
+                background: isSpeaking ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                color: isSpeaking ? 'var(--accent)' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+              title={isSpeaking ? '停止朗读' : '朗读文章'}
+            >
+              {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              {isSpeaking ? '停止' : '朗读'}
+            </button>
+          </div>
 
           {/* 元信息栏 */}
           <div className="mb-6 flex flex-wrap items-center gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -328,6 +413,18 @@ export default function ArticlePage() {
               <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
               稍后阅读
             </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              style={{
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <Share2 size={16} />
+              分享
+            </button>
             <a
               href={article.url}
               target="_blank"
@@ -369,6 +466,48 @@ export default function ArticlePage() {
               中英对照
             </button>
           </div>
+
+          {/* 相关文章 */}
+          {relatedArticles.length > 0 && (
+            <div className="mt-10">
+              <h2
+                className="mb-4 text-lg font-semibold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                相关文章
+              </h2>
+              <div className="space-y-3">
+                {relatedArticles.map((ra) => (
+                  <button
+                    key={ra.id}
+                    onClick={() => router.push(`/article/${ra.id}`)}
+                    className="glow-border flex w-full items-start gap-4 rounded-xl border p-4 text-left transition-colors hover:brightness-105"
+                    style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+                  >
+                    {ra.cover_image && (
+                      <img
+                        src={ra.cover_image}
+                        alt=""
+                        className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        className="text-sm font-medium line-clamp-2"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {ra.title}
+                      </h3>
+                      <div className="mt-1.5 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        {ra.feed_title && <span>{ra.feed_title}</span>}
+                        <span>{format(new Date(ra.published_at), 'MM-dd HH:mm')}</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </article>
 
         {/* 右侧面板 */}

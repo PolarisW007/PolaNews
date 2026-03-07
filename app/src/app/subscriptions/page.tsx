@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Rss, Plus, Trash2, Loader2, ExternalLink } from 'lucide-react';
+import { Rss, Plus, Trash2, Loader2, ExternalLink, Upload, Download } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api-client';
@@ -52,6 +52,64 @@ export default function SubscriptionsPage() {
     setAdding(false);
   };
 
+  const [importing, setImporting] = useState(false);
+
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+  const handleImportOPML = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.opml,.xml';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      setImporting(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${basePath}/api/subscriptions/import`, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        const json = await res.json();
+        if (json.success) {
+          toast(`OPML 导入成功，共导入 ${json.data?.imported_count ?? ''} 个订阅源`, 'success');
+          loadFeeds();
+        } else {
+          toast(`导入失败：${json.error || '未知错误'}`, 'error');
+        }
+      } catch {
+        toast('导入 OPML 文件失败', 'error');
+      }
+      setImporting(false);
+    };
+    input.click();
+  };
+
+  const handleExportOPML = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${basePath}/api/subscriptions/export`, { headers });
+      if (!res.ok) throw new Error('导出失败');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'subscriptions.opml';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('OPML 文件已下载', 'success');
+    } catch {
+      toast('导出 OPML 失败', 'error');
+    }
+  };
+
   const categories = [...new Set(feeds.map(f => f.category))];
 
   return (
@@ -66,13 +124,32 @@ export default function SubscriptionsPage() {
               管理你的 RSS 订阅源，共 {feeds.length} 个
             </p>
           </div>
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium"
-            style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-primary)' }}
-          >
-            <Plus size={16} /> 添加源
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleImportOPML}
+              disabled={importing}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
+              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+            >
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              导入 OPML
+            </button>
+            <button
+              onClick={handleExportOPML}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
+              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+            >
+              <Download size={14} />
+              导出 OPML
+            </button>
+            <button
+              onClick={() => setShowAdd(!showAdd)}
+              className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium"
+              style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-primary)' }}
+            >
+              <Plus size={16} /> 添加源
+            </button>
+          </div>
         </div>
 
         {showAdd && (
