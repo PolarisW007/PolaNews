@@ -62,11 +62,29 @@ function SkeletonCard() {
   );
 }
 
+/** 读取已读状态（localStorage） */
+function useReadStatus(articleId: string) {
+  const [isRead, setIsRead] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const read = localStorage.getItem(`read_${articleId}`);
+    setIsRead(!!read);
+  }, [articleId]);
+  return isRead;
+}
+
+/** 标记为已读 */
+function markRead(articleId: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(`read_${articleId}`, '1');
+}
+
 function ArticleCard({ article, displayLang }: { article: Article; displayLang: DisplayLang }) {
   const timeAgo = formatDistanceToNow(new Date(article.published_at || article.created_at), {
     addSuffix: true,
     locale: zhCN,
   });
+  const isRead = useReadStatus(article.id);
 
   const displayTitle = displayLang === 'zh' && article.title_zh
     ? article.title_zh
@@ -85,19 +103,20 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
     : '';
 
   return (
-    <Link href={`/article/${article.id}`}>
+    <Link href={`/article/${article.id}`} onClick={() => markRead(article.id)}>
       <div
         className="glow-border animate-fade-in cursor-pointer rounded-xl p-5 transition-colors"
         style={{
           backgroundColor: 'var(--bg-secondary)',
           border: '1px solid var(--border)',
+          opacity: isRead ? 0.72 : 1,
         }}
       >
         <div className="flex gap-4">
           <div className="flex-1">
             <h3
               className="mb-1 text-base font-semibold leading-snug"
-              style={{ color: 'var(--text-primary)' }}
+              style={{ color: isRead ? 'var(--text-secondary)' : 'var(--text-primary)' }}
             >
               {displayTitle}
             </h3>
@@ -166,17 +185,19 @@ function ArticleListItem({ article, displayLang }: { article: Article; displayLa
     addSuffix: true,
     locale: zhCN,
   });
+  const isRead = useReadStatus(article.id);
   const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
   const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
   const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
   const truncatedSummary = rawSummary ? (rawSummary.length > 100 ? rawSummary.slice(0, 100) + '...' : rawSummary) : '';
 
   return (
-    <Link href={`/article/${article.id}`}>
+    <Link href={`/article/${article.id}`} onClick={() => markRead(article.id)}>
       <div
         className="animate-fade-in rounded-lg px-4 py-3 transition-colors cursor-pointer"
         style={{
           backgroundColor: 'var(--bg-secondary)',
+          opacity: isRead ? 0.72 : 1,
           border: '1px solid var(--border)',
         }}
       >
@@ -184,7 +205,7 @@ function ArticleListItem({ article, displayLang }: { article: Article; displayLa
           <div className="flex-1 min-w-0">
             <h3
               className="text-sm font-medium leading-snug"
-              style={{ color: 'var(--text-primary)' }}
+              style={{ color: isRead ? 'var(--text-secondary)' : 'var(--text-primary)' }}
             >
               {displayTitle}
             </h3>
@@ -435,11 +456,31 @@ export default function HomePage() {
   };
 
   const [fetchMsg, setFetchMsg] = useState('');
+  const [fetchProgress, setFetchProgress] = useState(0); // 0-100
+  const fetchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleManualFetch = async () => {
     if (fetching) return;
     setFetching(true);
-    setFetchMsg('正在抓取 RSS 源，可能需要 30 秒左右...');
+    setFetchProgress(0);
+    setFetchMsg('正在连接 RSS 源...');
+
+    // 模拟进度动画：从 0→85 用约 40 秒匀速增长，最终由实际完成触发 100
+    let elapsed = 0;
+    fetchTimerRef.current = setInterval(() => {
+      elapsed += 1;
+      // 0→85% 在 40 秒内线性增长
+      const pct = Math.min(85, Math.round((elapsed / 40) * 85));
+      setFetchProgress(pct);
+      if (elapsed < 10) {
+        setFetchMsg(`正在抓取 RSS 源（${pct}%）...`);
+      } else if (elapsed < 25) {
+        setFetchMsg(`正在处理文章数据（${pct}%）...`);
+      } else {
+        setFetchMsg(`正在整理分类（${pct}%）...`);
+      }
+    }, 1000);
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 120_000);
@@ -449,19 +490,26 @@ export default function HomePage() {
       });
       clearTimeout(timeout);
       const json = await res.json();
+
+      if (fetchTimerRef.current) clearInterval(fetchTimerRef.current);
+      setFetchProgress(100);
+
       if (json.success) {
-        setFetchMsg(`抓取完成！共 ${json.data.feeds_count} 个源，${json.data.articles_count} 篇文章。后台正在翻译中...`);
+        setFetchMsg(`✓ 抓取完成！${json.data.feeds_count} 个源，新增 ${json.data.articles_count} 篇文章`);
         setPage(1);
         await fetchArticles(activeCategory, 1);
         setTimeout(() => {
           fetchArticles(activeCategory, 1);
           setFetchMsg('');
-        }, 30000);
+          setFetchProgress(0);
+        }, 5000);
       } else {
         setFetchMsg(`抓取失败：${json.error || '未知错误'}`);
-        setTimeout(() => setFetchMsg(''), 5000);
+        setTimeout(() => { setFetchMsg(''); setFetchProgress(0); }, 5000);
       }
     } catch (err) {
+      if (fetchTimerRef.current) clearInterval(fetchTimerRef.current);
+      setFetchProgress(0);
       if (err instanceof DOMException && err.name === 'AbortError') {
         setFetchMsg('抓取超时，请稍后重试');
       } else {
@@ -671,18 +719,29 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 抓取状态提示 */}
+          {/* 抓取状态提示（带进度条） */}
           {fetchMsg && (
             <div
-              className="mb-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm animate-fade-in"
+              className="mb-4 rounded-lg px-4 py-3 text-sm animate-fade-in overflow-hidden"
               style={{
-                backgroundColor: fetchMsg.includes('完成') ? 'rgba(0,230,118,0.1)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.1)' : 'rgba(0,230,118,0.05)',
-                color: fetchMsg.includes('完成') ? 'var(--accent)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'var(--danger)' : 'var(--text-secondary)',
-                border: `1px solid ${fetchMsg.includes('完成') ? 'rgba(0,230,118,0.2)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
+                backgroundColor: fetchMsg.startsWith('✓') ? 'rgba(0,230,118,0.1)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.1)' : 'rgba(0,230,118,0.05)',
+                border: `1px solid ${fetchMsg.startsWith('✓') ? 'rgba(0,230,118,0.2)' : fetchMsg.includes('失败') ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
               }}
             >
-              {fetching && <Loader2 size={14} className="animate-spin flex-shrink-0" />}
-              {fetchMsg}
+              <div className="flex items-center gap-2">
+                {fetching && <Loader2 size={14} className="animate-spin flex-shrink-0" style={{ color: 'var(--accent)' }} />}
+                <span style={{ color: fetchMsg.startsWith('✓') ? 'var(--accent)' : fetchMsg.includes('失败') ? 'var(--danger, #ff5252)' : 'var(--text-secondary)' }}>
+                  {fetchMsg}
+                </span>
+              </div>
+              {fetching && fetchProgress > 0 && (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--border)' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${fetchProgress}%`, background: 'var(--accent)' }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -47,6 +47,8 @@ export default function BroadcastDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
   const [showPlayer, setShowPlayer] = useState(true);
+  // 预加载前 2 段音频的 audio 元素
+  const preloadRefs = useRef<HTMLAudioElement[]>([]);
 
   const fetchBroadcast = useCallback(async () => {
     setLoading(true);
@@ -81,6 +83,49 @@ export default function BroadcastDetailPage() {
   useEffect(() => {
     fetchBroadcast();
   }, [fetchBroadcast]);
+
+  // 预加载前两段音频，减少播放等待
+  useEffect(() => {
+    if (segments.length === 0) return;
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    // 最多预加载前 2 段
+    const toPreload = segments.slice(0, 2);
+    preloadRefs.current.forEach(a => { a.pause(); a.src = ''; });
+    preloadRefs.current = [];
+
+    toPreload.forEach((seg) => {
+      if (seg.audio_url) {
+        // 已有音频 URL，直接预加载
+        const audio = new Audio(`${basePath}${seg.audio_url}`);
+        audio.preload = 'auto';
+        preloadRefs.current.push(audio);
+      } else if (seg.text) {
+        // 需要先合成再预加载（静默后台）
+        fetch(`${basePath}/api/tts/synthesize`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: seg.text.slice(0, 500), voice: broadcast?.voice_id || 'longwan_v3' }),
+        })
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && d.data?.url) {
+              const audio = new Audio(`${basePath}${d.data.url}`);
+              audio.preload = 'auto';
+              preloadRefs.current.push(audio);
+            }
+          })
+          .catch(() => {});
+      }
+    });
+
+    return () => {
+      preloadRefs.current.forEach(a => { a.pause(); a.src = ''; });
+    };
+  }, [segments, broadcast?.voice_id]);
 
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);

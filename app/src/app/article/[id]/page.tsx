@@ -17,8 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
-  BookOpen,
-  X,
+  Globe,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import clsx from 'clsx';
@@ -65,6 +64,7 @@ export default function ArticlePage() {
   const [bilingualMode, setBilingualMode] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translatedParagraphs, setTranslatedParagraphs] = useState<{ original: string; translated: string }[]>([]);
+  const [translatedHtml, setTranslatedHtml] = useState<string>('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsAudioRef, setTtsAudioRef] = useState<HTMLAudioElement | null>(null);
@@ -73,37 +73,95 @@ export default function ArticlePage() {
   // TTS 预加载
   const [preloadedAudioUrl, setPreloadedAudioUrl] = useState<string | null>(null);
   const [ttsPreloading, setTtsPreloading] = useState(false);
-  // 全文内嵌阅读器
-  const [showFulltext, setShowFulltext] = useState(false);
+  // 全文内容（自动加载）
   const [fulltextContent, setFulltextContent] = useState<string>('');
   const [fulltextLoading, setFulltextLoading] = useState(false);
-  const [fulltextTranslated, setFulltextTranslated] = useState<{ original: string; translated: string }[]>([]);
-  const [fulltextBilingual, setFulltextBilingual] = useState(false);
-  const [fulltextTranslating, setFulltextTranslating] = useState(false);
+  const [articleUrl, setArticleUrl] = useState<string>('');
 
   const ttsPreloadRef = useRef(false);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-  // 加载文章
+  // 加载文章 + 自动加载全文
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    // 重置全文状态（切换文章时）
+    setFulltextContent('');
+    setFulltextLoading(false);
+    ttsPreloadRef.current = false;
+    setPreloadedAudioUrl(null);
+    setTranslatedParagraphs([]);
+    setTranslatedHtml('');
+    setBilingualMode(false);
+
     api.articles.get(id).then((data) => {
       const art = data as Article;
       setArticle(art);
       setStarred(!!art.is_starred);
       setSaved(!!art.is_saved);
+      setArticleUrl(art.url || '');
       api.articles.markRead(id).catch(() => {});
 
-      if (!art.ai_summary) {
+      // 检查 localStorage 中是否有缓存的摘要（加速二次访问）
+      const cacheKey = `ai_summary_zh_${id}`;
+      const cachedSummary = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
+
+      if (!art.ai_summary && !cachedSummary) {
+        // 无摘要，生成并缓存
         setSummarizing(true);
         api.articles.summarize(art.id, 'zh')
           .then((d) => {
-            setArticle((prev) => prev ? { ...prev, ...(d as Article) } : prev);
+            const summaryData = d as Article;
+            setArticle((prev) => prev ? { ...prev, ...summaryData } : prev);
+            // 缓存到 localStorage
+            if (summaryData.ai_summary && typeof window !== 'undefined') {
+              localStorage.setItem(cacheKey, summaryData.ai_summary);
+            }
           })
           .catch(() => {})
           .finally(() => setSummarizing(false));
+      } else if (!art.ai_summary && cachedSummary) {
+        // 有本地缓存，先显示缓存内容
+        setArticle((prev) => prev ? { ...prev, ai_summary: cachedSummary } : prev);
       }
+
+      // 自动后台加载全文 + 自动中英对照
+      setFulltextLoading(true);
+      const isMeta = isMetadataOnlyContent(art.content || '');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      fetch(`${basePath}/api/articles/${id}/fulltext`, { headers })
+        .then(r => r.json())
+        .then(async (d) => {
+          if (d.success && d.data?.content) {
+            setFulltextContent(d.data.content);
+            if (d.data.url) setArticleUrl(d.data.url);
+          }
+
+          // 全文加载后，后台预翻译（用户点击"中英对照"时即可使用）
+          const contentHtml = (d.success && d.data?.content) ? d.data.content : (art.content || '');
+          if (contentHtml && contentHtml.length > 20) {
+            // 静默预翻译，不自动开启中英对照
+            fetch(`${basePath}/api/articles/${id}/translate`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mode: 'html', html: contentHtml }),
+            })
+              .then(r => r.json())
+              .then(tr => {
+                if (tr.success && tr.data?.translated_html) {
+                  setTranslatedHtml(tr.data.translated_html);
+                }
+                if (tr.success && tr.data?.paragraphs?.length > 0) {
+                  setTranslatedParagraphs(tr.data.paragraphs);
+                }
+              })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {})
+        .finally(() => setFulltextLoading(false));
 
       if (art.categories?.topic) {
         api.articles.list({ category: art.categories.topic, limit: 6 })
@@ -116,7 +174,7 @@ export default function ArticlePage() {
           .catch(() => {});
       }
     }).catch(() => { toast('加载文章失败', 'error'); }).finally(() => setLoading(false));
-  }, [id, toast]);
+  }, [id, toast, basePath]);
 
   // 清理
   useEffect(() => {
@@ -255,12 +313,22 @@ export default function ArticlePage() {
 
   const handleSummarize = async () => {
     if (!article) return;
+    // 已有当前语言的摘要则直接复用，不重复请求
+    const existing =
+      summaryLang === 'en' ? article.ai_summary_en
+      : summaryLang === 'ja' ? article.ai_summary_ja
+      : article.ai_summary;
+    if (existing) {
+      toast('AI 摘要已就绪', 'info');
+      return;
+    }
     setSummarizing(true);
     try {
       const data = await api.articles.summarize(article.id, summaryLang) as Article;
       setArticle((prev) => prev ? { ...prev, ...data } : prev);
-      // 重置预加载（摘要更新了，需重新预加载 TTS）
-      if (summaryLang === 'zh') {
+      // 持久化到 localStorage（减少下次重复请求）
+      if (summaryLang === 'zh' && data.ai_summary && typeof window !== 'undefined') {
+        localStorage.setItem(`ai_summary_zh_${article.id}`, data.ai_summary);
         setPreloadedAudioUrl(null);
         ttsPreloadRef.current = false;
       }
@@ -295,87 +363,63 @@ export default function ArticlePage() {
       return;
     }
     if (!article) return;
-    if (translatedParagraphs.length > 0) {
+    // 已有预翻译的 HTML，直接开启
+    if (translatedHtml) {
       setBilingualMode(true);
       return;
     }
+    // 没有预翻译结果，手动触发 HTML 翻译
     setTranslating(true);
     try {
-      const data = await api.articles.translate(article.id);
-      if (data?.paragraphs) {
-        setTranslatedParagraphs(data.paragraphs);
+      const contentHtml = fulltextContent || article.content || '';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${basePath}/api/articles/${article.id}/translate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ mode: 'html', html: contentHtml }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.translated_html) {
+        setTranslatedHtml(data.data.translated_html);
+        if (data.data.paragraphs) setTranslatedParagraphs(data.data.paragraphs);
         setBilingualMode(true);
+      } else {
+        toast('翻译失败，请稍后重试', 'error');
       }
     } catch { toast('翻译失败，请稍后重试', 'error'); }
     finally { setTranslating(false); }
   };
 
-  // 全文阅读器
-  const handleOpenFulltext = async () => {
-    if (!article) return;
-    if (showFulltext) { setShowFulltext(false); return; }
-    setShowFulltext(true);
-
-    if (fulltextContent) return; // 已加载
-
-    setFulltextLoading(true);
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${basePath}/api/articles/${article.id}/fulltext`, { headers });
-      const data = await res.json();
-      if (data.success && data.data?.content) {
-        setFulltextContent(data.data.content);
-      } else {
-        // 降级：使用 article.content
-        setFulltextContent(article.content || '');
-      }
-    } catch {
-      setFulltextContent(article.content || '');
-    } finally {
-      setFulltextLoading(false);
-    }
-  };
-
-  const handleFulltextBilingual = async () => {
-    if (fulltextBilingual) { setFulltextBilingual(false); return; }
-    if (fulltextTranslated.length > 0) { setFulltextBilingual(true); return; }
-    if (!article) return;
-    setFulltextTranslating(true);
-    try {
-      const data = await api.articles.translate(article.id);
-      if (data?.paragraphs) {
-        setFulltextTranslated(data.paragraphs);
-        setFulltextBilingual(true);
-      }
-    } catch { toast('翻译失败', 'error'); }
-    finally { setFulltextTranslating(false); }
+  const richSanitizeOptions = {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'figure', 'figcaption', 'video', 'source', 'iframe', 'picture', 'span', 'div', 'section', 'header', 'footer', 'nav', 'main', 'article', 'aside', 'details', 'summary', 'mark', 'time', 'small', 'sub', 'sup']),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      '*': ['class', 'style', 'id'],
+      img: ['src', 'alt', 'width', 'height', 'loading', 'srcset', 'sizes', 'decoding'],
+      iframe: ['src', 'width', 'height', 'frameborder', 'allowfullscreen'],
+      video: ['src', 'controls', 'width', 'height', 'poster'],
+      source: ['src', 'type', 'srcset', 'sizes', 'media'],
+      a: ['href', 'target', 'rel', 'title'],
+      time: ['datetime'],
+    },
   };
 
   const sanitizedContent = article
-    ? sanitizeHtml(article.content, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'figure', 'figcaption', 'video', 'source', 'iframe']),
-        allowedAttributes: {
-          ...sanitizeHtml.defaults.allowedAttributes,
-          img: ['src', 'alt', 'width', 'height', 'loading'],
-          iframe: ['src', 'width', 'height', 'frameborder', 'allowfullscreen'],
-        },
-      })
+    ? sanitizeHtml(article.content, richSanitizeOptions)
     : '';
 
   const sanitizedFulltext = fulltextContent
-    ? sanitizeHtml(fulltextContent, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'figure', 'figcaption']),
-        allowedAttributes: {
-          ...sanitizeHtml.defaults.allowedAttributes,
-          img: ['src', 'alt', 'width', 'height', 'loading'],
-        },
-      })
+    ? sanitizeHtml(fulltextContent, richSanitizeOptions)
+    : '';
+
+  const sanitizedTranslatedHtml = translatedHtml
+    ? sanitizeHtml(translatedHtml, richSanitizeOptions)
     : '';
 
   const hasSourceInfo = article && (article.url || (article.content?.includes('Comments URL') || article.content?.includes('Points:')));
-  const isMetaContent = article ? isMetadataOnlyContent(article.content || '') : false;
 
   if (loading) {
     return (
@@ -406,11 +450,13 @@ export default function ArticlePage() {
 
   const imp = importanceColors[article.importance] || importanceColors.normal;
 
+  const isBilingualActive = bilingualMode && (translatedHtml || translatedParagraphs.length > 0);
+
   return (
     <MainLayout>
-      <div className="mx-auto flex max-w-[1200px] gap-8">
+      <div className={`mx-auto flex gap-8 ${isBilingualActive ? 'max-w-[1600px]' : 'max-w-[1200px]'}`}>
         {/* 主内容区 */}
-        <article className="min-w-0 flex-1" style={{ maxWidth: 800 }}>
+        <article className="min-w-0 flex-1" style={{ maxWidth: isBilingualActive ? undefined : 800 }}>
           <button
             onClick={() => router.back()}
             className="mb-6 flex items-center gap-2 text-sm transition-colors hover:opacity-80"
@@ -433,6 +479,7 @@ export default function ArticlePage() {
           )}
 
           {/* 元信息栏 */}
+
           <div className="mb-4 flex flex-wrap items-center gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
             {article.feed_title && (
               <span className="flex items-center gap-1.5">
@@ -461,6 +508,22 @@ export default function ArticlePage() {
             >
               {article.importance}
             </span>
+            {articleUrl && (
+              <>
+                <span>·</span>
+                <a
+                  href={articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 transition-opacity hover:opacity-80"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  <Globe size={12} />
+                  在原网站阅读
+                  <ExternalLink size={10} />
+                </a>
+              </>
+            )}
           </div>
 
           {/* 文章源信息 - 默认收起 */}
@@ -553,18 +616,6 @@ export default function ArticlePage() {
               {translating ? <Loader2 size={16} className="animate-spin" /> : <Languages size={16} />}
               中英对照
             </button>
-            <button
-              onClick={handleOpenFulltext}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
-              style={{
-                background: showFulltext ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
-                color: showFulltext ? 'var(--accent)' : 'var(--text-secondary)',
-                border: '1px solid var(--border)',
-              }}
-            >
-              <BookOpen size={16} />
-              全文阅读
-            </button>
             <div className="mx-1 h-5 w-px" style={{ background: 'var(--border)' }} />
             <button
               onClick={async () => {
@@ -646,115 +697,79 @@ export default function ArticlePage() {
             </div>
           )}
 
-          {/* 元数据型文章提示（HN/Reddit） */}
-          {isMetaContent && (
-            <div
-              className="mb-6 rounded-xl border p-5 text-center"
-              style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-            >
-              <BookOpen size={24} className="mx-auto mb-2" style={{ color: 'var(--text-secondary)' }} />
-              <p className="mb-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                此文章来自聚合源，正文内容需从原网站提取
-              </p>
-              <button
-                onClick={handleOpenFulltext}
-                className="rounded-lg px-4 py-2 text-sm font-medium"
-                style={{ background: 'var(--accent)', color: '#000' }}
-              >
-                点击加载全文
-              </button>
+          {/* 加载状态提示 */}
+          {fulltextLoading && (
+            <div className="mb-4 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <Loader2 size={12} className="animate-spin" style={{ color: 'var(--accent)' }} />
+              正在加载完整内容…
+            </div>
+          )}
+          {translating && !fulltextLoading && (
+            <div className="mb-4 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <Loader2 size={12} className="animate-spin" style={{ color: 'var(--accent)' }} />
+              正在翻译全文，即将显示中英对照…
             </div>
           )}
 
           {/* 正文内容 */}
-          {!isMetaContent && (
-            bilingualMode && translatedParagraphs.length > 0 ? (
-              <div className="space-y-6">
-                {translatedParagraphs.map((p, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-4 rounded-lg p-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-                    <div className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{p.original}</div>
-                    <div className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{p.translated}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
+          {isBilingualActive ? (
+            <div>
               <div
-                className="article-content prose prose-invert max-w-none"
-                style={{ color: 'var(--text-primary)', lineHeight: 1.8 }}
-                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-              />
-            )
-          )}
-
-          {/* 全文内嵌阅读器 */}
-          {showFulltext && (
-            <div
-              className="mt-8 rounded-xl border"
-              style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-            >
-              <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+                className="mb-4 flex items-center justify-between rounded-lg px-3 py-2 text-xs"
+                style={{ background: 'rgba(0,230,118,0.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,0.2)' }}
+              >
                 <div className="flex items-center gap-2">
-                  <BookOpen size={18} style={{ color: 'var(--accent)' }} />
-                  <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>全文内容</h3>
-                  {article.url && (
-                    <a
-                      href={article.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-2 flex items-center gap-1 text-xs"
-                      style={{ color: 'var(--accent)' }}
-                    >
-                      在原网站阅读 <ExternalLink size={10} />
-                    </a>
-                  )}
+                  <Languages size={12} />
+                  中英对照模式
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleFulltextBilingual}
-                    disabled={fulltextTranslating}
-                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs"
-                    style={{
-                      background: fulltextBilingual ? 'rgba(0,230,118,0.12)' : 'var(--bg-primary)',
-                      color: fulltextBilingual ? 'var(--accent)' : 'var(--text-secondary)',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    {fulltextTranslating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
-                    中英对照
-                  </button>
-                  <button
-                    onClick={() => setShowFulltext(false)}
-                    className="rounded p-1 hover:opacity-70"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setBilingualMode(false)}
+                  className="rounded px-2 py-0.5 text-xs transition-colors hover:opacity-80"
+                  style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                >
+                  关闭对照
+                </button>
               </div>
-              <div className="p-5">
-                {fulltextLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 size={24} className="animate-spin" style={{ color: 'var(--accent)' }} />
-                    <span className="ml-2 text-sm" style={{ color: 'var(--text-secondary)' }}>正在提取全文…</span>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <div className="mb-2 text-xs font-medium" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+                    English Original
                   </div>
-                ) : fulltextBilingual && fulltextTranslated.length > 0 ? (
-                  <div className="space-y-4">
-                    {fulltextTranslated.map((p, i) => (
-                      <div key={i} className="grid grid-cols-2 gap-4 rounded-lg p-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
-                        <div className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{p.original}</div>
-                        <div className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{p.translated}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
                   <div
                     className="article-content prose prose-invert max-w-none"
-                    style={{ color: 'var(--text-primary)', lineHeight: 1.8 }}
+                    style={{ color: 'var(--text-secondary)', lineHeight: 1.8, fontSize: '0.9rem' }}
                     dangerouslySetInnerHTML={{ __html: sanitizedFulltext || sanitizedContent }}
                   />
-                )}
+                </div>
+                <div>
+                  <div className="mb-2 text-xs font-medium" style={{ color: 'var(--accent)', opacity: 0.8 }}>
+                    中文译文
+                  </div>
+                  {sanitizedTranslatedHtml ? (
+                    <div
+                      className="article-content prose prose-invert max-w-none"
+                      style={{ color: 'var(--text-primary)', lineHeight: 1.8, fontSize: '0.9rem' }}
+                      dangerouslySetInnerHTML={{ __html: sanitizedTranslatedHtml }}
+                    />
+                  ) : (
+                    <div
+                      className="prose prose-invert max-w-none text-sm leading-relaxed"
+                      style={{ color: 'var(--text-primary)', lineHeight: 1.8 }}
+                    >
+                      {translatedParagraphs.map((p, i) => (
+                        <p key={i} className="mb-4">{p.translated}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          ) : (
+            <div
+              className="article-content prose prose-invert max-w-none"
+              style={{ color: 'var(--text-primary)', lineHeight: 1.8 }}
+              dangerouslySetInnerHTML={{ __html: sanitizedFulltext || sanitizedContent }}
+            />
           )}
 
           <style jsx global>{`
@@ -853,8 +868,8 @@ export default function ArticlePage() {
           )}
         </article>
 
-        {/* 右侧面板 */}
-        <aside className="hidden w-80 shrink-0 lg:block" style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
+        {/* 右侧面板（中英对照模式下隐藏，把空间让给双栏内容） */}
+        <aside className={`w-80 shrink-0 lg:block ${isBilingualActive ? 'hidden' : 'hidden lg:block'}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
           <div
             className="rounded-xl border p-5"
             style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
