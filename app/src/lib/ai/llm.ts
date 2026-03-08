@@ -32,6 +32,9 @@ export async function callLLM(
   }
   messages.push({ role: 'user', content: prompt });
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+
   const res = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -42,8 +45,12 @@ export async function callLLM(
       model: MODEL,
       messages,
       temperature: 0.3,
+      max_tokens: 4000,
     }),
+    signal: controller.signal,
   });
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
     const errText = await res.text();

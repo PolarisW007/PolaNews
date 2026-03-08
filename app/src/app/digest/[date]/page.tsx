@@ -11,12 +11,74 @@ import {
   BarChart3,
   FileText,
   Hash,
+  Radio,
 } from 'lucide-react';
-import clsx from 'clsx';
 import { api } from '@/lib/api-client';
 import type { DailyDigest, DigestHeadline, DigestCategorySummary } from '@/lib/types';
 import MainLayout from '@/components/layout/MainLayout';
 import { useToast } from '@/components/ui/Toast';
+
+/** 简易 Markdown 转 HTML（支持标题/粗体/列表/水平线/段落） */
+function markdownToHtml(md: string): string {
+  const lines = md.split('\n');
+  const result: string[] = [];
+  let inList = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // 水平线
+    if (/^---+$/.test(line.trim())) {
+      if (inList) { result.push('</ul>'); inList = false; }
+      result.push('<hr style="border-color:var(--border);margin:1rem 0" />');
+      continue;
+    }
+
+    // 标题 h1-h3
+    const hMatch = line.match(/^(#{1,3})\s+(.+)/);
+    if (hMatch) {
+      if (inList) { result.push('</ul>'); inList = false; }
+      const level = hMatch[1].length;
+      const text = hMatch[2];
+      const size = level === 1 ? '1.25rem' : level === 2 ? '1.1rem' : '1rem';
+      const mt = level === 1 ? '2rem' : '1.5rem';
+      result.push(`<h${level} style="color:var(--text-primary);font-weight:600;font-size:${size};margin-top:${mt};margin-bottom:0.5rem">${escapeHtml(text)}</h${level}>`);
+      continue;
+    }
+
+    // 列表项
+    const liMatch = line.match(/^[-*]\s+(.+)/);
+    if (liMatch) {
+      if (!inList) { result.push('<ul style="list-style:disc;padding-left:1.5rem;margin:0.5rem 0">'); inList = true; }
+      result.push(`<li style="color:var(--text-primary);margin-bottom:0.25rem;font-size:0.875rem;line-height:1.6">${inlineFormat(liMatch[1])}</li>`);
+      continue;
+    }
+
+    // 空行
+    if (line.trim() === '') {
+      if (inList) { result.push('</ul>'); inList = false; }
+      continue;
+    }
+
+    // 普通段落
+    if (inList) { result.push('</ul>'); inList = false; }
+    result.push(`<p style="color:var(--text-primary);font-size:0.875rem;line-height:1.8;margin-bottom:0.75rem">${inlineFormat(line)}</p>`);
+  }
+
+  if (inList) result.push('</ul>');
+  return result.join('\n');
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function inlineFormat(s: string): string {
+  return escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:var(--bg-secondary);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.85em">$1</code>');
+}
 
 const LANGS = [
   { key: 'zh', label: '中' },
@@ -77,6 +139,10 @@ export default function DigestDetailPage() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     const url = `${basePath}/api/digests/${digest.id}/export?format=pdf${token ? `&token=${token}` : ''}`;
     window.open(url, '_blank');
+  };
+
+  const handleGenerateBroadcast = () => {
+    router.push('/broadcast');
   };
 
   const importanceColors: Record<string, { bg: string; text: string }> = {
@@ -357,7 +423,7 @@ export default function DigestDetailPage() {
           </section>
         )}
 
-        {/* 全文内容（如果有） */}
+        {/* 全文内容（Markdown 渲染） */}
         {digest.full_content && (
           <section className="mb-8">
             <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -366,27 +432,24 @@ export default function DigestDetailPage() {
             <div
               className="rounded-xl border p-6"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-            >
-              <pre
-                className="text-sm leading-relaxed"
-                style={{
-                  color: 'var(--text-primary)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  fontFamily: 'inherit',
-                }}
-              >
-                {digest.full_content}
-              </pre>
-            </div>
+              dangerouslySetInnerHTML={{ __html: markdownToHtml(digest.full_content) }}
+            />
           </section>
         )}
 
-        {/* 底部导出 */}
+        {/* 底部操作区 */}
         <div
-          className="flex justify-center gap-3 border-t py-8"
+          className="flex flex-wrap justify-center gap-3 border-t py-8"
           style={{ borderColor: 'var(--border)' }}
         >
+          <button
+            onClick={handleGenerateBroadcast}
+            className="flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-black transition-all hover:brightness-110"
+            style={{ background: 'var(--accent)' }}
+          >
+            <Radio size={16} />
+            生成今日播报
+          </button>
           <button
             onClick={handleExport}
             className="flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-colors"
@@ -397,7 +460,7 @@ export default function DigestDetailPage() {
             }}
           >
             <Download size={16} />
-            导出为 Markdown
+            导出 Markdown
           </button>
           <button
             onClick={handleExportPDF}
@@ -409,7 +472,7 @@ export default function DigestDetailPage() {
             }}
           >
             <FileText size={16} />
-            导出为 PDF
+            导出 PDF
           </button>
         </div>
       </div>

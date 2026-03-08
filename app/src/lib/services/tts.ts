@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync } from 'fs';
-import { writeFile, readFile, unlink } from 'fs/promises';
+import { writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { execute, queryOne } from '../db/schema';
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.COSYVOICE_API_KEY || '';
-const COSYVOICE_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech';
 
 const AUDIO_DIR = join(process.cwd(), 'data', 'audio');
 
@@ -24,28 +23,42 @@ export interface TTSVoice {
 }
 
 export const AVAILABLE_VOICES: TTSVoice[] = [
-  { id: 'longxiaochun', name: '龙小淳', language: 'zh', gender: 'female', description: '温柔女声，适合讲解和叙述' },
-  { id: 'longxiaoxia', name: '龙小夏', language: 'zh', gender: 'female', description: '活泼女声，适合新闻播报' },
-  { id: 'longxiaobai', name: '龙小白', language: 'zh', gender: 'male', description: '年轻男声，清晰自然' },
-  { id: 'longlaotie', name: '龙老铁', language: 'zh', gender: 'male', description: '浑厚男声，适合深度分析' },
-  { id: 'longshu', name: '龙叔', language: 'zh', gender: 'male', description: '成熟男声，适合新闻主播' },
-  { id: 'longxiaofei', name: '龙小飞', language: 'zh', gender: 'male', description: '阳光男声，朝气蓬勃' },
-  { id: 'longyue', name: '龙悦', language: 'zh', gender: 'female', description: '甜美女声，亲切自然' },
-  { id: 'longwan', name: '龙婉', language: 'zh', gender: 'female', description: '优雅女声，知性大方' },
+  { id: 'longshu_v3', name: '龙书', language: 'zh', gender: 'male', description: '沉稳青年男，适合新闻播报' },
+  { id: 'longshuo_v3', name: '龙硕', language: 'zh', gender: 'male', description: '博才干练男，新闻主播风格' },
+  { id: 'longanyang', name: '龙安洋', language: 'zh', gender: 'male', description: '阳光大男孩，支持情感表达' },
+  { id: 'longxiaochun_v3', name: '龙小淳', language: 'zh', gender: 'female', description: '知性积极女声' },
+  { id: 'longxiaoxia_v3', name: '龙小夏', language: 'zh', gender: 'female', description: '沉稳权威女声' },
+  { id: 'longlaotie_v3', name: '龙老铁', language: 'zh', gender: 'male', description: '东北直率男，深度分析' },
+  { id: 'longyue_v3', name: '龙悦', language: 'zh', gender: 'female', description: '温暖磁性女声' },
+  { id: 'longwan_v3', name: '龙婉', language: 'zh', gender: 'female', description: '细腻柔声女，知性大方' },
 ];
+
+const VOICE_COMPAT_MAP: Record<string, string> = {
+  longshu: 'longshu_v3',
+  longshuo: 'longshuo_v3',
+  longxiaochun: 'longxiaochun_v3',
+  longxiaoxia: 'longxiaoxia_v3',
+  longlaotie: 'longlaotie_v3',
+  longyue: 'longyue_v3',
+  longwan: 'longwan_v3',
+  longxiaobai: 'longxiaobai_v3',
+  longxiaofei: 'longanyang',
+};
 
 export async function synthesizeAudio(
   text: string,
-  voice: string = 'longshu'
+  voice: string = 'longshu_v3'
 ): Promise<{ filename: string; filepath: string } | null> {
   ensureAudioDir();
 
-  if (!DASHSCOPE_API_KEY) {
-    console.warn('[TTS] DASHSCOPE_API_KEY 未配置，使用 edge-tts 降级');
-    return synthesizeEdgeTTS(text, voice);
+  const resolvedVoice = VOICE_COMPAT_MAP[voice] || voice;
+
+  if (DASHSCOPE_API_KEY) {
+    const result = await synthesizeCosyVoice(text, resolvedVoice);
+    if (result) return result;
   }
 
-  return synthesizeCosyVoice(text, voice);
+  return synthesizeEdgeTTS(text, resolvedVoice);
 }
 
 async function synthesizeCosyVoice(
@@ -56,31 +69,34 @@ async function synthesizeCosyVoice(
   const filepath = join(AUDIO_DIR, filename);
 
   try {
-    const res = await fetch(COSYVOICE_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'cosyvoice-v1',
-        input: { text: text.slice(0, 5000) },
-        voice,
-      }),
-    });
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[TTS] CosyVoice API 错误 ${res.status}: ${errText}`);
-      return synthesizeEdgeTTS(text, voice);
+    const scriptPath = join(process.cwd(), 'scripts', 'tts_cosyvoice.py');
+    if (!existsSync(scriptPath)) {
+      console.warn('[TTS] CosyVoice Python 脚本不存在，降级到 edge-tts');
+      return null;
     }
 
-    const buffer = Buffer.from(await res.arrayBuffer());
-    await writeFile(filepath, buffer);
-    return { filename, filepath };
+    const safeText = text.slice(0, 800).replace(/'/g, "'\\''");
+    const { stdout, stderr } = await execAsync(
+      `python3 "${scriptPath}" --text '${safeText}' --voice "${voice}" --output "${filepath}" --model cosyvoice-v3-flash`,
+      {
+        timeout: 60000,
+        env: { ...process.env, DASHSCOPE_API_KEY },
+      }
+    );
+
+    if (stdout.includes('OK:')) {
+      return { filename, filepath };
+    }
+
+    console.error(`[TTS] CosyVoice Python 脚本错误: ${stderr}`);
+    return null;
   } catch (e) {
     console.error('[TTS] CosyVoice 合成失败:', e);
-    return synthesizeEdgeTTS(text, voice);
+    return null;
   }
 }
 
@@ -132,7 +148,7 @@ export async function generateBroadcastAudio(broadcastId: string): Promise<boole
     ? rawSegments as Array<{ index: number; text: string }>
     : (typeof rawSegments === 'string' ? JSON.parse(rawSegments) : []);
 
-  const voice = (broadcast.voice_id as string) || 'longshu';
+  const voice = (broadcast.voice_id as string) || 'longshu_v3';
 
   let totalDuration = 0;
   const updatedSegments = [];

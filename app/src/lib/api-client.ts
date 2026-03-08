@@ -146,12 +146,18 @@ export const api = {
   broadcasts: {
     list: (page = 1, limit = 20) =>
       request(`/api/broadcast/list?page=${page}&limit=${limit}`),
+    get: (id: string) => request(`/api/broadcast/${id}`),
     latest: (lang = 'zh') =>
       request(`/api/broadcast/latest?lang=${lang}`),
-    generate: (lang = 'zh') =>
+    generate: (lang = 'zh', voice = 'longshu_v3') =>
       request('/api/broadcast/generate', {
         method: 'POST',
-        body: JSON.stringify({ lang }),
+        body: JSON.stringify({ lang, voice }),
+      }),
+    articleTTS: (articleId: string, voice = 'longshu_v3') =>
+      request(`/api/broadcast/article/${articleId}`, {
+        method: 'POST',
+        body: JSON.stringify({ voice }),
       }),
   },
   trending: {

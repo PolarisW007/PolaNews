@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -72,6 +72,8 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
     ? article.title_zh
     : article.title;
 
+  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
+
   const rawSummary = displayLang === 'zh' && article.summary_zh
     ? article.summary_zh
     : article.summary;
@@ -94,11 +96,16 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
         <div className="flex gap-4">
           <div className="flex-1">
             <h3
-              className="mb-2 text-base font-semibold leading-snug"
+              className="mb-1 text-base font-semibold leading-snug"
               style={{ color: 'var(--text-primary)' }}
             >
               {displayTitle}
             </h3>
+            {showBilingual && (
+              <p className="mb-2 text-xs leading-snug" style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>
+                {article.title}
+              </p>
+            )}
 
             <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
               {article.favicon_url && (
@@ -160,35 +167,54 @@ function ArticleListItem({ article, displayLang }: { article: Article; displayLa
     locale: zhCN,
   });
   const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
+  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
+  const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
+  const truncatedSummary = rawSummary ? (rawSummary.length > 100 ? rawSummary.slice(0, 100) + '...' : rawSummary) : '';
 
   return (
     <Link href={`/article/${article.id}`}>
       <div
-        className="animate-fade-in flex items-center gap-3 rounded-lg px-4 py-3 transition-colors cursor-pointer"
+        className="animate-fade-in rounded-lg px-4 py-3 transition-colors cursor-pointer"
         style={{
           backgroundColor: 'var(--bg-secondary)',
           border: '1px solid var(--border)',
         }}
       >
-        <h3
-          className="flex-1 truncate text-sm font-medium"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {displayTitle}
-        </h3>
-        <span className="flex-shrink-0 text-xs" style={{ color: 'var(--accent-secondary)' }}>
-          {article.feed_title}
-        </span>
-        <span className="flex-shrink-0 text-xs" style={{ color: 'var(--text-secondary)' }}>
-          {timeAgo}
-        </span>
-        {article.category && (
-          <span
-            className="flex-shrink-0 rounded-full px-2 py-0.5 text-xs"
-            style={{ backgroundColor: 'var(--glow)', color: 'var(--accent)' }}
-          >
-            {article.category}
-          </span>
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <h3
+              className="text-sm font-medium leading-snug"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {displayTitle}
+            </h3>
+            {showBilingual && (
+              <p className="mt-0.5 text-xs truncate" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+                {article.title}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>
+              {article.feed_title}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {timeAgo}
+            </span>
+            {article.category && (
+              <span
+                className="rounded-full px-2 py-0.5 text-xs"
+                style={{ backgroundColor: 'var(--glow)', color: 'var(--accent)' }}
+              >
+                {article.category}
+              </span>
+            )}
+          </div>
+        </div>
+        {truncatedSummary && (
+          <p className="mt-1.5 text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+            {truncatedSummary}
+          </p>
         )}
       </div>
     </Link>
@@ -201,6 +227,7 @@ function ArticleMagazineHero({ article, displayLang }: { article: Article; displ
     locale: zhCN,
   });
   const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
+  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
   const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
   const truncatedSummary = rawSummary
     ? rawSummary.length > 200 ? rawSummary.slice(0, 200) + '...' : rawSummary
@@ -222,9 +249,14 @@ function ArticleMagazineHero({ article, displayLang }: { article: Article; displ
           />
         )}
         <div className="p-6">
-          <h3 className="mb-3 text-xl font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="mb-1 text-xl font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
             {displayTitle}
           </h3>
+          {showBilingual && (
+            <p className="mb-3 text-sm" style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>
+              {article.title}
+            </p>
+          )}
           <div className="mb-3 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
             {article.favicon_url && (
               <img src={article.favicon_url} alt="" className="h-4 w-4 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -250,6 +282,7 @@ function ArticleMagazineSmall({ article, displayLang }: { article: Article; disp
     locale: zhCN,
   });
   const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
+  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
   const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
   const truncatedSummary = rawSummary
     ? rawSummary.length > 80 ? rawSummary.slice(0, 80) + '...' : rawSummary
@@ -271,9 +304,14 @@ function ArticleMagazineSmall({ article, displayLang }: { article: Article; disp
           />
         )}
         <div className="p-4">
-          <h3 className="mb-2 text-sm font-semibold leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="mb-1 text-sm font-semibold leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>
             {displayTitle}
           </h3>
+          {showBilingual && (
+            <p className="mb-2 text-xs leading-snug line-clamp-1" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+              {article.title}
+            </p>
+          )}
           <div className="mb-2 flex items-center gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
             <span>{article.feed_title}</span>
             <span>·</span>
@@ -304,6 +342,7 @@ export default function HomePage() {
   const [displayLang, setDisplayLang] = useState<DisplayLang>('zh');
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const langMenuRef = useRef<HTMLDivElement | null>(null);
   const [filterImportance, setFilterImportance] = useState('');
   const [filterSentiment, setFilterSentiment] = useState('');
   const [filterTimeRange, setFilterTimeRange] = useState('');
@@ -376,6 +415,18 @@ export default function HomePage() {
   useEffect(() => {
     fetchDigest();
   }, [fetchDigest]);
+
+  // 点击语言菜单外部关闭
+  useEffect(() => {
+    if (!showLangMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setShowLangMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showLangMenu]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -497,7 +548,7 @@ export default function HomePage() {
               筛选
             </button>
             {/* 语言切换 */}
-            <div className="relative flex-shrink-0">
+            <div className="relative flex-shrink-0" ref={langMenuRef}>
               <button
                 onClick={() => setShowLangMenu(!showLangMenu)}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all"

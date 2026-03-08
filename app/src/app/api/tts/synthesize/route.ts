@@ -4,7 +4,7 @@ import { synthesizeAudio } from '@/lib/services/tts';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { text, voice = 'longshu' } = body as { text?: string; voice?: string };
+    const { text, voice = 'longshu_v3' } = body as { text?: string; voice?: string };
 
     if (!text || !text.trim()) {
       return NextResponse.json(

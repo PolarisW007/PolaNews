@@ -7,7 +7,7 @@ import { generateBroadcastAudio } from '@/lib/services/tts';
 export async function POST(req: NextRequest) {
   try {
     let lang = 'zh';
-    let voice = 'longshu';
+    let voice = 'longshu_v3';
     try {
       const body = await req.json();
       if (body?.lang) lang = String(body.lang);
@@ -30,10 +30,18 @@ export async function POST(req: NextRequest) {
 
     const fullContent = (digest.full_content as string) || '';
 
-    const systemPrompt =
-      '你是一位专业的新闻主播。请将以下新闻摘要改写为口语化的播报稿。要求：开场白问候、自然过渡、口语化表达、结尾祝语。按新闻分段，每段用 [段落N] 标记。';
+    const systemPrompt = `你是一位专业的新闻主播。请将以下新闻摘要改写为口语化的播报稿。
 
-    const script = await callLLM(fullContent, systemPrompt);
+要求：
+1. 开场白问候（例："各位听众朋友大家好，欢迎收听一念三千全球资讯播报。"）
+2. 头条播报：3条最重要新闻，每条含标题朗读和100字以内AI摘要
+3. 分类快讯：按分类播报要点
+4. 结尾祝语
+
+格式要求：用 [段落1] [段落2] ... 标记每个段落，每段100-300字。`;
+
+    const digestPreview = fullContent.slice(0, 6000);
+    const script = await callLLM(digestPreview, systemPrompt);
 
     const segmentRegex = /\[段落(\d+)\]\s*/g;
     const parts = script.split(segmentRegex).filter(Boolean);
@@ -42,13 +50,20 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < parts.length; i += 2) {
       const idx = parseInt(parts[i], 10);
       const text = (parts[i + 1] || '').trim();
-      if (text) {
+      if (text && !isNaN(idx)) {
         segments.push({ index: idx, text });
       }
     }
 
     if (segments.length === 0 && script.trim()) {
-      segments.push({ index: 1, text: script.trim() });
+      const lines = script.split('\n\n').filter(l => l.trim().length > 10);
+      lines.forEach((text, i) => {
+        segments.push({ index: i + 1, text: text.trim() });
+      });
+    }
+
+    if (segments.length === 0) {
+      segments.push({ index: 1, text: script.trim() || '暂无播报内容' });
     }
 
     const estimatedDuration = script.length * 120;

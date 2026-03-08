@@ -28,9 +28,9 @@ export async function POST(
     }
 
     const article = await queryOne(
-      'SELECT id, title, content, summary FROM articles WHERE id = $1',
+      'SELECT id, title, content, summary, full_content FROM articles WHERE id = $1',
       [id]
-    ) as { id: string; title: string; content: string; summary: string } | null;
+    ) as { id: string; title: string; content: string; summary: string; full_content: string } | null;
 
     if (!article) {
       return NextResponse.json(
@@ -39,21 +39,38 @@ export async function POST(
       );
     }
 
+    const sourceText = (article.full_content || article.content || article.summary || '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/Article URL:.*?\n/g, '')
+      .replace(/Comments URL:.*?\n/g, '')
+      .replace(/Points:\s*\d+\n?/g, '')
+      .replace(/# Comments:\s*\d+\n?/g, '')
+      .trim()
+      .slice(0, 6000);
+
     const { summary, key_points } = await summarizeArticle(
       article.title,
-      article.content || article.summary || '',
+      sourceText || article.title,
       lang
     );
 
     const aiSummaryCol = lang === 'zh' ? 'ai_summary' : lang === 'en' ? 'ai_summary_en' : 'ai_summary_ja';
+    const keyPointsCol = lang === 'zh' ? 'ai_key_points' : lang === 'en' ? 'ai_key_points_en' : 'ai_key_points_ja';
     await execute(
-      `UPDATE articles SET ${aiSummaryCol} = $1, ai_key_points = $2 WHERE id = $3`,
+      `UPDATE articles SET ${aiSummaryCol} = $1, ${keyPointsCol} = $2 WHERE id = $3`,
       [summary, JSON.stringify(key_points), id]
     );
 
     return NextResponse.json({
       success: true,
-      data: { summary, key_points },
+      data: {
+        ai_summary: lang === 'zh' ? summary : undefined,
+        ai_summary_en: lang === 'en' ? summary : undefined,
+        ai_summary_ja: lang === 'ja' ? summary : undefined,
+        ai_key_points: lang === 'zh' ? key_points : undefined,
+        ai_key_points_en: lang === 'en' ? key_points : undefined,
+        ai_key_points_ja: lang === 'ja' ? key_points : undefined,
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';

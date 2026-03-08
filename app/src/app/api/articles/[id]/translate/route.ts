@@ -35,9 +35,15 @@ export async function GET(
 
     let paragraphs: TranslationParagraph[];
     if (typeof row.translation_zh === 'string') {
-      paragraphs = JSON.parse(row.translation_zh);
+      try { paragraphs = JSON.parse(row.translation_zh); } catch { paragraphs = []; }
     } else {
       paragraphs = row.translation_zh as unknown as TranslationParagraph[];
+    }
+    if (paragraphs.length === 0) {
+      return NextResponse.json(
+        { success: false, error: '暂无翻译缓存' },
+        { status: 404 }
+      );
     }
     return NextResponse.json({ success: true, data: { paragraphs } });
   } catch (err) {
@@ -57,9 +63,9 @@ export async function POST(
     const { id } = await params;
 
     const row = await queryOne(
-      'SELECT id, title, content, translation_zh FROM articles WHERE id = $1',
+      'SELECT id, title, content, full_content, summary, ai_summary, translation_zh FROM articles WHERE id = $1',
       [id]
-    ) as { id: string; title: string; content: string; translation_zh: unknown } | null;
+    ) as { id: string; title: string; content: string; full_content: string; summary: string; ai_summary: string; translation_zh: unknown } | null;
 
     if (!row) {
       return NextResponse.json(
@@ -71,25 +77,32 @@ export async function POST(
     if (row.translation_zh) {
       let paragraphs: TranslationParagraph[];
       if (typeof row.translation_zh === 'string') {
-        paragraphs = JSON.parse(row.translation_zh);
+        try { paragraphs = JSON.parse(row.translation_zh); } catch { paragraphs = []; }
       } else {
         paragraphs = row.translation_zh as TranslationParagraph[];
       }
-      return NextResponse.json({ success: true, data: { paragraphs } });
+      if (paragraphs.length > 0) {
+        return NextResponse.json({ success: true, data: { paragraphs } });
+      }
     }
 
-    const text = row.content || row.title;
-    const rawParagraphs = text
-      .split(/\n{2,}/)
+    const text = row.ai_summary || row.summary || row.full_content || row.content || row.title;
+    const cleanText = text.replace(/<[^>]*>/g, '').slice(0, 3000);
+    const rawParagraphs = cleanText
+      .split(/\n{2,}|\n/)
       .map((p) => p.trim())
-      .filter(Boolean);
+      .filter((p) => p.length > 5)
+      .slice(0, 15);
 
-    const prompt = `Translate the following paragraphs from English to Chinese. Return a JSON array where each element has "original" (the original text) and "translated" (the Chinese translation). Only return the JSON array, no other text.
+    if (rawParagraphs.length === 0) {
+      rawParagraphs.push(cleanText.trim() || row.title);
+    }
 
-Paragraphs:
-${rawParagraphs.map((p, i) => `[${i}] ${p}`).join('\n\n')}`;
+    const prompt = `将以下英文段落翻译为中文。返回JSON数组，每个元素包含 "original"(原文) 和 "translated"(译文)。只返回JSON数组。
 
-    const systemPrompt = 'You are a professional translator. Return valid JSON only, no markdown fences.';
+${rawParagraphs.map((p, i) => `[${i}] ${p}`).join('\n')}`;
+
+    const systemPrompt = '你是专业翻译。只返回合法JSON数组，不要markdown围栏。';
     const result = await callLLM(prompt, systemPrompt);
 
     let paragraphs: TranslationParagraph[];

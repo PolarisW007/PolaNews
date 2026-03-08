@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Radio, Plus, Loader2, Calendar, Globe, Clock } from 'lucide-react';
+import { Radio, Plus, Loader2, Calendar, Globe, Clock, Mic } from 'lucide-react';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
 import { api } from '@/lib/api-client';
@@ -21,36 +21,87 @@ interface Broadcast {
   created_at: string;
 }
 
+interface TTSVoice {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export default function BroadcastListPage() {
   const router = useRouter();
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState('longshu_v3');
+  const [voices, setVoices] = useState<TTSVoice[]>([]);
+  const [showVoiceMenu, setShowVoiceMenu] = useState(false);
+  const [pollCount, setPollCount] = useState(0);
   const { toast } = useToast();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceMenuRef = useRef<HTMLDivElement>(null);
 
-  const fetchBroadcasts = async () => {
-    setLoading(true);
+  const fetchBroadcasts = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await api.broadcasts.list() as { broadcasts: Broadcast[] };
       setBroadcasts(data.broadcasts || []);
     } catch (e) {
-      toast(e instanceof Error ? e.message : '获取播报列表失败', 'error');
+      if (!silent) toast(e instanceof Error ? e.message : '获取播报列表失败', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  }, [toast]);
+
+  const fetchVoices = async () => {
+    try {
+      const data = await api.tts.voices() as TTSVoice[];
+      if (Array.isArray(data)) setVoices(data);
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
     fetchBroadcasts();
+    fetchVoices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 关闭语音菜单（点击外部）
+  useEffect(() => {
+    if (!showVoiceMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (voiceMenuRef.current && !voiceMenuRef.current.contains(e.target as Node)) {
+        setShowVoiceMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showVoiceMenu]);
+
+  // 生成中轮询
+  useEffect(() => {
+    if (generating) {
+      setPollCount(0);
+      pollRef.current = setInterval(async () => {
+        setPollCount(c => c + 1);
+        await fetchBroadcasts(true);
+      }, 3000);
+    } else {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [generating, fetchBroadcasts]);
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await api.broadcasts.generate('zh');
-      await fetchBroadcasts();
-      toast('播报生成成功', 'success');
+      await api.broadcasts.generate('zh', selectedVoice);
+      toast('播报生成中，音频正在后台合成...', 'success');
+      await fetchBroadcasts(true);
     } catch (e) {
       toast(e instanceof Error ? e.message : '生成播报失败', 'error');
     } finally {
@@ -80,16 +131,69 @@ export default function BroadcastListPage() {
               AI 将每日摘要转化为口语化播报稿
             </p>
           </div>
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
-            style={{ background: 'var(--accent)' }}
-          >
-            {generating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            生成新播报
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setShowVoiceMenu(!showVoiceMenu)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-medium transition-all"
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+              >
+                <Mic size={14} />
+                {voices.find(v => v.id === selectedVoice)?.name || '龙叔'}
+              </button>
+              {showVoiceMenu && (
+                <div
+                  className="absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-lg py-1"
+                  style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                >
+                  {voices.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => { setSelectedVoice(v.id); setShowVoiceMenu(false); }}
+                      className="block w-full px-4 py-2 text-left text-xs transition-colors"
+                      style={{
+                        color: v.id === selectedVoice ? 'var(--accent)' : 'var(--text-secondary)',
+                        backgroundColor: 'transparent',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      <span className="font-medium">{v.name}</span>
+                      <span className="ml-2 opacity-60">{v.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
+              style={{ background: 'var(--accent)' }}
+            >
+              {generating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+              生成新播报
+            </button>
+          </div>
         </div>
+
+        {/* 生成中状态提示 */}
+        {generating && (
+          <div
+            className="mb-4 flex items-center gap-3 rounded-xl border p-4"
+            style={{ background: 'rgba(0,230,118,0.06)', borderColor: 'var(--accent)' }}
+          >
+            <Loader2 size={18} className="animate-spin shrink-0" style={{ color: 'var(--accent)' }} />
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
+                正在生成播报脚本…
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                AI 正在撰写今日新闻播报，约需 30-60 秒（已刷新 {pollCount} 次）
+              </p>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20">

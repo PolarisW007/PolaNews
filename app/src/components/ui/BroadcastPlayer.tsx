@@ -59,7 +59,7 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
       const res = await fetch(`${basePath}/api/tts/synthesize`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ text: text.slice(0, 5000), voice: 'longshu' }),
+        body: JSON.stringify({ text: text.slice(0, 5000), voice: 'longshu_v3' }),
       });
       const data = await res.json();
       if (data.success && data.data?.url) {

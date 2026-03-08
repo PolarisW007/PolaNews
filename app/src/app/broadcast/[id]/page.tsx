@@ -46,18 +46,27 @@ export default function BroadcastDetailPage() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
-  const [showPlayer, setShowPlayer] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(true);
 
   const fetchBroadcast = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.broadcasts.list() as { broadcasts: Broadcast[] };
-      const found = (data.broadcasts || []).find((b) => b.id === id);
-      if (found) {
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${basePath}/api/broadcast/${id}`, { headers });
+      const json = await res.json();
+
+      if (json.success && json.data) {
+        const found = json.data as Broadcast;
         setBroadcast(found);
         try {
-          const parsed = JSON.parse(found.segments) as Segment[];
-          setSegments(parsed);
+          const rawSegs = typeof found.segments === 'string'
+            ? JSON.parse(found.segments)
+            : found.segments;
+          setSegments(Array.isArray(rawSegs) ? rawSegs : []);
         } catch {
           setSegments([]);
         }
@@ -151,7 +160,7 @@ export default function BroadcastDetailPage() {
           </div>
         </div>
 
-        {/* Tip & Play trigger */}
+        {/* Play trigger（仅在关闭播放器后显示） */}
         {!showPlayer && (
           <div className="mb-6">
             <button
