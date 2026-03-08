@@ -106,19 +106,21 @@ export async function summarizeArticle(
 
   const langHint =
     lang === 'zh'
-      ? '用中文回答'
+      ? '必须用中文（简体中文）输出所有内容，summary 和 key_points 都要用中文。'
       : lang === 'ja'
-        ? '日本語で答えてください'
-        : 'Respond in English';
+        ? '必ず日本語で出力してください。summary も key_points も日本語で書いてください。'
+        : 'Respond in English.';
 
-  const systemPrompt = `You are a news summarization assistant. Respond with valid JSON only, no markdown.
+  const systemPrompt = `You are a news summarization assistant. IMPORTANT: ${langHint}
+Respond with valid JSON only, no markdown.
 Format: {"summary": string, "key_points": string[]}
 - summary: 2-3 sentence summary
-- key_points: 3-5 bullet points
-${langHint}`;
+- key_points: 3-5 bullet points`;
 
   const contentPreview = content.slice(0, 4000);
-  const prompt = `Summarize this article:\nTitle: ${title}\n\nContent:\n${contentPreview}\n\nReturn JSON:`;
+  const prompt = lang === 'zh'
+    ? `请用中文总结以下文章：\n标题：${title}\n\n内容：\n${contentPreview}\n\n请返回JSON格式，summary和key_points都必须是中文：`
+    : `Summarize this article:\nTitle: ${title}\n\nContent:\n${contentPreview}\n\nReturn JSON:`;
   const text = await callLLM(prompt, systemPrompt);
   const json = extractJson(text);
   return json as unknown as SummarizeResult;

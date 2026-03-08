@@ -33,7 +33,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const newHash = await bcrypt.hash(new_password, 12);
-    await execute('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, user.userId]);
+    await execute('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.userId]);
 
     return NextResponse.json({ success: true, message: '密码修改成功' });
   } catch (error) {
