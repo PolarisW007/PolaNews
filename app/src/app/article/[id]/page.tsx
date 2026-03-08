@@ -16,6 +16,8 @@ import {
   Share2,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Globe,
 } from 'lucide-react';
@@ -78,6 +80,16 @@ export default function ArticlePage() {
   const [fulltextLoading, setFulltextLoading] = useState(false);
   const [articleUrl, setArticleUrl] = useState<string>('');
 
+  interface NeighborArticle {
+    id: string;
+    title: string;
+    title_zh: string;
+    feed_title: string;
+    published_at: string;
+  }
+  const [prevArticle, setPrevArticle] = useState<NeighborArticle | null>(null);
+  const [nextArticle, setNextArticle] = useState<NeighborArticle | null>(null);
+
   const ttsPreloadRef = useRef(false);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
@@ -93,6 +105,18 @@ export default function ArticlePage() {
     setTranslatedParagraphs([]);
     setTranslatedHtml('');
     setBilingualMode(false);
+    setPrevArticle(null);
+    setNextArticle(null);
+
+    fetch(`${basePath}/api/articles/${id}/neighbors`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data) {
+          setPrevArticle(d.data.prev || null);
+          setNextArticle(d.data.next || null);
+        }
+      })
+      .catch(() => {});
 
     api.articles.get(id).then((data) => {
       const art = data as Article;
@@ -175,6 +199,20 @@ export default function ArticlePage() {
       }
     }).catch(() => { toast('加载文章失败', 'error'); }).finally(() => setLoading(false));
   }, [id, toast, basePath]);
+
+  // 键盘快捷键：← 上一篇, → 下一篇
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === 'ArrowLeft' && prevArticle) {
+        router.push(`/article/${prevArticle.id}`);
+      } else if (e.key === 'ArrowRight' && nextArticle) {
+        router.push(`/article/${nextArticle.id}`);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [prevArticle, nextArticle, router]);
 
   // 清理
   useEffect(() => {
@@ -866,7 +904,101 @@ export default function ArticlePage() {
               </div>
             </div>
           )}
+          {/* 上一篇 / 下一篇 底部导航 */}
+          {(prevArticle || nextArticle) && (
+            <div
+              className="mt-10 grid gap-4"
+              style={{
+                gridTemplateColumns: prevArticle && nextArticle ? '1fr 1fr' : '1fr',
+                borderTop: '1px solid var(--border)',
+                paddingTop: '1.5rem',
+              }}
+            >
+              {prevArticle && (
+                <button
+                  onClick={() => router.push(`/article/${prevArticle.id}`)}
+                  className="group flex flex-col gap-1.5 rounded-xl p-4 text-left transition-all hover:brightness-110"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--accent)' }}>
+                    <ChevronLeft size={14} />
+                    <span>上一篇</span>
+                    <span className="ml-1 hidden rounded px-1.5 py-0.5 text-[10px] sm:inline" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>←</span>
+                  </div>
+                  <span className="text-sm font-medium line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                    {prevArticle.title_zh || prevArticle.title}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {prevArticle.feed_title}
+                  </span>
+                </button>
+              )}
+              {nextArticle && (
+                <button
+                  onClick={() => router.push(`/article/${nextArticle.id}`)}
+                  className="group flex flex-col gap-1.5 rounded-xl p-4 text-right transition-all hover:brightness-110"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    gridColumn: !prevArticle ? '1' : undefined,
+                  }}
+                >
+                  <div className="flex items-center justify-end gap-1.5 text-xs" style={{ color: 'var(--accent)' }}>
+                    <span className="mr-1 hidden rounded px-1.5 py-0.5 text-[10px] sm:inline" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>→</span>
+                    <span>下一篇</span>
+                    <ChevronRight size={14} />
+                  </div>
+                  <span className="text-sm font-medium line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                    {nextArticle.title_zh || nextArticle.title}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {nextArticle.feed_title}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
         </article>
+
+        {/* 侧边悬浮上下篇按钮 */}
+        {prevArticle && (
+          <button
+            onClick={() => router.push(`/article/${prevArticle.id}`)}
+            className="fixed z-30 hidden items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 xl:flex"
+            style={{
+              left: 280,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 40,
+              height: 40,
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+            }}
+            title={`上一篇: ${prevArticle.title_zh || prevArticle.title}`}
+          >
+            <ChevronLeft size={20} />
+          </button>
+        )}
+        {nextArticle && (
+          <button
+            onClick={() => router.push(`/article/${nextArticle.id}`)}
+            className="fixed z-30 hidden items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 xl:flex"
+            style={{
+              right: 20,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 40,
+              height: 40,
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+            }}
+            title={`下一篇: ${nextArticle.title_zh || nextArticle.title}`}
+          >
+            <ChevronRight size={20} />
+          </button>
+        )}
 
         {/* 右侧面板（中英对照模式下隐藏，把空间让给双栏内容） */}
         <aside className={`w-80 shrink-0 lg:block ${isBilingualActive ? 'hidden' : 'hidden lg:block'}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
