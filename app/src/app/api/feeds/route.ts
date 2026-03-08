@@ -23,14 +23,30 @@ function rowToFeed(row: Record<string, unknown>): Feed {
   };
 }
 
+let feedsCache: { data: Feed[]; ts: number } | null = null;
+const FEEDS_CACHE_TTL = 120_000;
+
+export function invalidateFeedsCache() { feedsCache = null; }
+
 export async function GET() {
   try {
+    if (feedsCache && Date.now() - feedsCache.ts < FEEDS_CACHE_TTL) {
+      return NextResponse.json(
+        { success: true, data: feedsCache.data },
+        { headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=120' } },
+      );
+    }
+
     const rows = await query(
       "SELECT * FROM feeds WHERE status != 'paused' ORDER BY category, title"
     );
 
     const feeds = rows.map(rowToFeed);
-    return NextResponse.json({ success: true, data: feeds });
+    feedsCache = { data: feeds, ts: Date.now() };
+    return NextResponse.json(
+      { success: true, data: feeds },
+      { headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=120' } },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';
     return NextResponse.json(
@@ -71,6 +87,7 @@ export async function POST(req: NextRequest) {
 
     const row = await queryOne('SELECT * FROM feeds WHERE id = $1', [id]);
     const feed = rowToFeed(row as Record<string, unknown>);
+    invalidateFeedsCache();
 
     return NextResponse.json({ success: true, data: feed });
   } catch (err) {
@@ -109,6 +126,7 @@ export async function DELETE(req: NextRequest) {
     await execute('DELETE FROM articles WHERE feed_id = $1', [feed_id]);
     await execute('DELETE FROM user_subscriptions WHERE feed_id = $1', [feed_id]);
     await execute('DELETE FROM feeds WHERE id = $1', [feed_id]);
+    invalidateFeedsCache();
 
     return NextResponse.json({ success: true });
   } catch (err) {

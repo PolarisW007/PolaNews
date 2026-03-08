@@ -238,6 +238,10 @@ export async function initializeDatabase(): Promise<void> {
     'CREATE INDEX IF NOT EXISTS idx_social_shares_created_at ON social_shares(created_at DESC)',
     'CREATE INDEX IF NOT EXISTS idx_social_shares_platform ON social_shares(platform)',
     'CREATE INDEX IF NOT EXISTS idx_feeds_status ON feeds(status)',
+    'CREATE INDEX IF NOT EXISTS idx_feeds_category ON feeds(category)',
+    'CREATE INDEX IF NOT EXISTS idx_articles_sentiment ON articles(sentiment)',
+    'CREATE INDEX IF NOT EXISTS idx_articles_region ON articles(region)',
+    'CREATE INDEX IF NOT EXISTS idx_articles_pub_created ON articles(published_at DESC, created_at DESC)',
     'CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)',
   ];
 

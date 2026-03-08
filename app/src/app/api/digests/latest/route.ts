@@ -17,11 +17,23 @@ function rowToDigest(row: Record<string, unknown>) {
   };
 }
 
+const digestCache = new Map<string, { data: unknown; ts: number }>();
+const DIGEST_CACHE_TTL = 300_000;
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const lang = searchParams.get('lang') || 'zh';
     const date = searchParams.get('date');
+
+    const cacheKey = `${lang}:${date || 'latest'}`;
+    const cached = digestCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < DIGEST_CACHE_TTL) {
+      return NextResponse.json(
+        { success: true, data: cached.data },
+        { headers: { 'Cache-Control': 'public, max-age=120, stale-while-revalidate=300' } },
+      );
+    }
 
     let row: Record<string, unknown> | null = null;
     if (date) {
@@ -42,10 +54,17 @@ export async function GET(req: NextRequest) {
       ) as Record<string, unknown> | null;
     }
 
-    return NextResponse.json({
-      success: true,
-      data: row ? rowToDigest(row) : null,
-    });
+    const data = row ? rowToDigest(row) : null;
+    digestCache.set(cacheKey, { data, ts: Date.now() });
+    if (digestCache.size > 50) {
+      const oldest = [...digestCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+      for (let i = 0; i < 10; i++) digestCache.delete(oldest[i][0]);
+    }
+
+    return NextResponse.json(
+      { success: true, data },
+      { headers: { 'Cache-Control': 'public, max-age=120, stale-while-revalidate=300' } },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';
     return NextResponse.json(
