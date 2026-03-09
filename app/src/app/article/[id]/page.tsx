@@ -746,6 +746,123 @@ export default function ArticlePage() {
             )}
           </div>
 
+          {/* 移动端 AI 摘要：操作栏下方、正文上方 */}
+          <div className={`lg:hidden mb-4 ${isBilingualActive ? 'hidden' : ''}`}>
+            <div
+              className="rounded-xl border p-4"
+              style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} style={{ color: 'var(--accent)' }} />
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    AI 摘要
+                  </h3>
+                </div>
+                {ttsPreloading && (
+                  <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <Loader2 size={10} className="animate-spin" />
+                    准备中
+                  </span>
+                )}
+                {preloadedAudioUrl && !ttsPreloading && (
+                  <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
+                    <span className="h-2 w-2 rounded-full bg-green-400" />
+                    音频已就绪
+                  </span>
+                )}
+              </div>
+
+              <div
+                className="mb-3 flex gap-1 rounded-lg p-1"
+                style={{ background: 'var(--bg-primary)' }}
+              >
+                {LANGS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => handleLangSwitch(key)}
+                    className="flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    style={{
+                      background: summaryLang === key ? 'var(--bg-hover)' : 'transparent',
+                      color: summaryLang === key ? 'var(--accent)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {summarizing ? (
+                <div className="space-y-2 py-3">
+                  <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '100%' }} />
+                  <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '85%' }} />
+                  <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '70%' }} />
+                  <p className="text-center text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
+                    正在为你生成 AI 摘要…
+                  </p>
+                </div>
+              ) : currentSummary ? (
+                <div className="space-y-2">
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                    {currentSummary}
+                  </p>
+                  {article.ai_key_points && article.ai_key_points.length > 0 && (
+                    <div>
+                      <h4 className="mb-1.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        关键要点
+                      </h4>
+                      <ul className="space-y-1">
+                        {article.ai_key_points.map((point, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <CheckCircle size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} />
+                            <span style={{ color: 'var(--text-primary)' }}>{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>暂无 AI 摘要</p>
+                  <button
+                    onClick={handleSummarize}
+                    className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                    style={{ background: 'var(--accent)', color: '#000' }}
+                  >
+                    生成 AI 摘要
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {article.keywords && article.keywords.length > 0 && (
+              <div
+                className="mt-3 rounded-xl border p-4"
+                style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+              >
+                <h3 className="mb-2 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  关键词
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {article.keywords.map((kw) => (
+                    <span
+                      key={kw}
+                      className="rounded-full px-2.5 py-1 text-xs"
+                      style={{
+                        background: 'rgba(0,230,118,0.08)',
+                        color: 'var(--accent-secondary)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 封面图 */}
           {article.cover_image && (
             <div className="mb-6 overflow-hidden rounded-xl">
@@ -982,8 +1099,8 @@ export default function ArticlePage() {
           )}
         </article>
 
-        {/* 右侧面板（移动端在文章下方显示，桌面端侧栏固定；中英对照模式下完全隐藏） */}
-        <aside className={`w-full lg:w-80 shrink-0 ${isBilingualActive ? 'hidden' : 'block'}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
+        {/* 右侧面板（桌面端侧栏固定；移动端已在操作栏下方内联显示；中英对照模式下完全隐藏） */}
+        <aside className={`hidden lg:block w-80 shrink-0 ${isBilingualActive ? '!hidden' : ''}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
           <div
             className="rounded-xl border p-5"
             style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
