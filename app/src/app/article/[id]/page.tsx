@@ -214,6 +214,57 @@ export default function ArticlePage() {
     return () => document.removeEventListener('keydown', handler);
   }, [prevArticle, nextArticle, router]);
 
+  // 触摸手势：左右滑动切换文章
+  const touchRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
+  const [swipeHint, setSwipeHint] = useState<'left' | 'right' | null>(null);
+  const swipeHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const MIN_DISTANCE = 80;
+    const MAX_VERTICAL = 60;
+    const MAX_TIME = 400;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      touchRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now() };
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchRef.current) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchRef.current.startX;
+      const dy = Math.abs(t.clientY - touchRef.current.startY);
+      const elapsed = Date.now() - touchRef.current.startTime;
+      touchRef.current = null;
+
+      if (elapsed > MAX_TIME || dy > MAX_VERTICAL || Math.abs(dx) < MIN_DISTANCE) return;
+
+      if (dx > 0 && prevArticle) {
+        setSwipeHint('right');
+        if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current);
+        swipeHintTimer.current = setTimeout(() => {
+          setSwipeHint(null);
+          router.push(`/article/${prevArticle.id}`);
+        }, 300);
+      } else if (dx < 0 && nextArticle) {
+        setSwipeHint('left');
+        if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current);
+        swipeHintTimer.current = setTimeout(() => {
+          setSwipeHint(null);
+          router.push(`/article/${nextArticle.id}`);
+        }, 300);
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchend', onTouchEnd);
+      if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current);
+    };
+  }, [prevArticle, nextArticle, router]);
+
   // 清理
   useEffect(() => {
     return () => {
@@ -492,6 +543,20 @@ export default function ArticlePage() {
 
   return (
     <MainLayout>
+      {/* 滑动切换提示 */}
+      {swipeHint && (
+        <div className="fixed inset-0 z-[60] pointer-events-none flex items-center justify-center">
+          <div
+            className="flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium animate-fade-in"
+            style={{ background: 'rgba(0,0,0,0.75)', color: 'var(--accent)', backdropFilter: 'blur(8px)' }}
+          >
+            {swipeHint === 'right' ? <ChevronLeft size={18} /> : null}
+            {swipeHint === 'right' ? '上一篇' : '下一篇'}
+            {swipeHint === 'left' ? <ChevronRight size={18} /> : null}
+          </div>
+        </div>
+      )}
+
       <div className={`mx-auto flex flex-col lg:flex-row gap-6 lg:gap-8 ${isBilingualActive ? 'max-w-[1600px]' : 'max-w-[1200px]'}`}>
         {/* 主内容区 */}
         <article className="min-w-0 flex-1" style={{ maxWidth: isBilingualActive ? undefined : 800 }}>
