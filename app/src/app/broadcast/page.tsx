@@ -122,20 +122,32 @@ export default function BroadcastListPage() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-              智能播报
-            </h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              AI 将每日摘要转化为口语化播报稿
-            </p>
+        <div className="mb-5 sm:mb-8">
+          <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-0">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+                智能播报
+              </h1>
+              <p className="mt-1 text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
+                AI 将每日摘要转化为口语化播报稿
+              </p>
+            </div>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60 shrink-0"
+              style={{ background: 'var(--accent)' }}
+            >
+              {generating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+              <span className="hidden sm:inline">生成新播报</span>
+              <span className="sm:hidden">新建</span>
+            </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" ref={voiceMenuRef}>
             <div className="relative">
               <button
                 onClick={() => setShowVoiceMenu(!showVoiceMenu)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-medium transition-all"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all"
                 style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
               >
                 <Mic size={14} />
@@ -143,7 +155,7 @@ export default function BroadcastListPage() {
               </button>
               {showVoiceMenu && (
                 <div
-                  className="absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-lg py-1"
+                  className="absolute left-0 sm:right-0 sm:left-auto top-full z-20 mt-1 min-w-[160px] rounded-lg py-1"
                   style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
                 >
                   {voices.map(v => (
@@ -155,8 +167,6 @@ export default function BroadcastListPage() {
                         color: v.id === selectedVoice ? 'var(--accent)' : 'var(--text-secondary)',
                         backgroundColor: 'transparent',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       <span className="font-medium">{v.name}</span>
                       <span className="ml-2 opacity-60">{v.description}</span>
@@ -165,15 +175,6 @@ export default function BroadcastListPage() {
                 </div>
               )}
             </div>
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
-              style={{ background: 'var(--accent)' }}
-            >
-              {generating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-              生成新播报
-            </button>
           </div>
         </div>
 
@@ -227,25 +228,25 @@ export default function BroadcastListPage() {
               <button
                 key={b.id}
                 onClick={() => router.push(`/broadcast/${b.id}`)}
-                className="glow-border group flex w-full items-center gap-4 rounded-xl border p-5 text-left transition-colors"
+                className="glow-border group flex w-full items-center gap-3 sm:gap-4 rounded-xl border p-3 sm:p-5 text-left transition-colors"
                 style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
               >
                 <div
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
+                  className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg"
                   style={{ background: 'rgba(0,230,118,0.1)' }}
                 >
-                  <Radio size={22} style={{ color: 'var(--accent)' }} />
+                  <Radio size={20} style={{ color: 'var(--accent)' }} />
                 </div>
 
                 <div className="min-w-0 flex-1">
                   <h3
-                    className="text-base font-medium group-hover:underline"
+                    className="text-sm sm:text-base font-medium group-hover:underline"
                     style={{ color: 'var(--text-primary)' }}
                   >
                     {b.broadcast_date} 新闻播报
                   </h3>
                   <div
-                    className="mt-1 flex items-center gap-3 text-xs"
+                    className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
                     style={{ color: 'var(--text-secondary)' }}
                   >
                     <span className="flex items-center gap-1">

@@ -142,10 +142,10 @@ export default function SearchPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-4xl mx-auto animate-fade-in">
-        <div className="mb-8">
+      <div className="max-w-4xl mx-auto px-3 sm:px-5 animate-fade-in">
+        <div className="mb-5 sm:mb-8">
           <div
-            className="flex items-center gap-3 rounded-xl px-5 py-4"
+            className="flex flex-wrap items-center gap-2 sm:gap-3 rounded-xl px-3 sm:px-5 py-3 sm:py-4"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
             <Search size={20} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
@@ -166,7 +166,7 @@ export default function SearchPage() {
             )}
             <button
               onClick={handleSearch}
-              className="rounded-lg px-5 py-2 text-sm font-medium"
+              className="shrink-0 rounded-lg px-3 sm:px-5 py-2 text-sm font-medium"
               style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-primary)' }}
             >
               搜索
@@ -174,7 +174,7 @@ export default function SearchPage() {
           </div>
           {/* 搜索模式切换 */}
           <div
-            className="mt-3 flex items-center gap-4"
+            className="mt-3 flex flex-wrap items-center gap-2 sm:gap-4"
           >
             <div
               className="flex gap-1 rounded-lg p-1"
@@ -182,7 +182,7 @@ export default function SearchPage() {
             >
               <button
                 onClick={() => { setSearchMode('keyword'); setArticles([]); setSearched(false); }}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                className="flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
                   backgroundColor: searchMode === 'keyword' ? 'var(--bg-hover)' : 'transparent',
                   color: searchMode === 'keyword' ? 'var(--accent)' : 'var(--text-secondary)',
@@ -193,7 +193,7 @@ export default function SearchPage() {
               </button>
               <button
                 onClick={() => { setSearchMode('semantic'); setArticles([]); setSearched(false); }}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                className="flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
                   backgroundColor: searchMode === 'semantic' ? 'var(--bg-hover)' : 'transparent',
                   color: searchMode === 'semantic' ? 'var(--accent)' : 'var(--text-secondary)',
@@ -207,7 +207,7 @@ export default function SearchPage() {
 
           {/* 搜索历史 */}
           {searchHistory.length > 0 && !searched && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <Clock size={12} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
               {searchHistory.map((h, i) => (
                 <button
@@ -253,14 +253,14 @@ export default function SearchPage() {
 
         {articles.length > 0 && (
           <>
-            <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-xs sm:text-sm mb-3 sm:mb-4" style={{ color: 'var(--text-secondary)' }}>
               共 {total} 条结果
             </p>
             <div className="space-y-3">
               {articles.map(article => (
                 <Link key={article.id} href={`/article/${article.id}`}>
                   <div
-                    className="rounded-xl p-5 glow-border cursor-pointer"
+                    className="rounded-xl p-3 sm:p-5 glow-border cursor-pointer"
                     style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
                   >
                     <h3
@@ -278,7 +278,7 @@ export default function SearchPage() {
                         ),
                       }}
                     />
-                    <div className="flex items-center gap-3 mt-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3">
                       <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>
                         {article.feed_title}
                       </span>
@@ -295,7 +295,7 @@ export default function SearchPage() {
               <div className="flex justify-center py-6">
                 <button
                   onClick={() => setPage(p => p + 1)}
-                  className="rounded-lg px-6 py-2.5 text-sm"
+                  className="rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 text-sm"
                   style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
                 >
                   加载更多

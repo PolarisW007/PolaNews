@@ -180,10 +180,10 @@ export default function TrendingPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto animate-fade-in">
-        <div className="flex items-center gap-3 mb-8">
-          <TrendingUp size={24} style={{ color: 'var(--accent)' }} />
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+      <div className="max-w-5xl mx-auto px-3 sm:px-5 animate-fade-in">
+        <div className="flex items-center gap-3 mb-5 sm:mb-8">
+          <TrendingUp size={24} style={{ color: 'var(--accent)' }} className="shrink-0" />
+          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
             热门趋势
           </h1>
         </div>
@@ -196,12 +196,12 @@ export default function TrendingPage() {
           <div className="space-y-8">
             {/* 热门关键词标签云 */}
             <section
-              className="rounded-xl p-6"
+              className="rounded-xl p-3 sm:p-5"
               style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
             >
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-3 sm:mb-4">
                 <Tag size={18} style={{ color: 'var(--accent)' }} />
-                <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <h2 className="text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
                   热门关键词
                 </h2>
               </div>
@@ -235,12 +235,12 @@ export default function TrendingPage() {
 
             {/* Top 分类分布 */}
             <section
-              className="rounded-xl p-6"
+              className="rounded-xl p-3 sm:p-5"
               style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
             >
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-3 sm:mb-4">
                 <PieChart size={18} style={{ color: 'var(--accent)' }} />
-                <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <h2 className="text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
                   分类分布
                 </h2>
               </div>
@@ -251,9 +251,9 @@ export default function TrendingPage() {
                   .map(([cat, count]) => {
                     const pct = totalCat > 0 ? (count / totalCat) * 100 : 0;
                     return (
-                      <div key={cat} className="flex items-center gap-3">
+                      <div key={cat} className="flex items-center gap-2 sm:gap-3">
                         <span
-                          className="w-24 text-sm shrink-0"
+                          className="w-16 sm:w-24 text-xs sm:text-sm shrink-0"
                           style={{ color: 'var(--text-secondary)' }}
                         >
                           {CATEGORY_LABELS[cat] || cat}
@@ -272,7 +272,7 @@ export default function TrendingPage() {
                           />
                         </div>
                         <span
-                          className="w-16 text-right text-xs"
+                          className="w-12 sm:w-16 text-right text-xs shrink-0"
                           style={{ color: 'var(--text-secondary)' }}
                         >
                           {count}
@@ -290,12 +290,12 @@ export default function TrendingPage() {
 
             {/* Breaking / Important 新闻 */}
             <section
-              className="rounded-xl p-6"
+              className="rounded-xl p-3 sm:p-5"
               style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
             >
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-3 sm:mb-4">
                 <Zap size={18} style={{ color: 'var(--accent)' }} />
-                <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <h2 className="text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
                   重点快讯
                 </h2>
               </div>
@@ -308,7 +308,7 @@ export default function TrendingPage() {
                   breakingNews.map((art) => (
                     <Link key={art.id} href={`/article/${art.id}`}>
                       <div
-                        className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:opacity-90"
+                        className="flex items-center gap-2 sm:gap-3 rounded-lg p-3 transition-colors hover:opacity-90"
                         style={{
                           backgroundColor: 'var(--bg-primary)',
                           border: '1px solid var(--border)',

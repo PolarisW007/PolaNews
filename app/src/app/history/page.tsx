@@ -53,12 +53,12 @@ export default function HistoryPage() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-4xl animate-fade-in">
-        <div className="mb-8 flex items-center gap-3">
-          <Clock size={24} style={{ color: 'var(--accent)' }} />
+      <div className="mx-auto max-w-4xl px-3 sm:px-5 animate-fade-in">
+        <div className="mb-5 sm:mb-8 flex items-center gap-3">
+          <Clock size={24} style={{ color: 'var(--accent)' }} className="shrink-0" />
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>阅读历史</h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>你读过的所有文章</p>
+            <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>阅读历史</h1>
+            <p className="mt-1 text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>你读过的所有文章</p>
           </div>
         </div>
 
@@ -79,15 +79,15 @@ export default function HistoryPage() {
               {articles.map(article => (
                 <Link key={article.id} href={`/article/${article.id}`}>
                   <div
-                    className="glow-border cursor-pointer rounded-xl p-5 transition-colors"
+                    className="glow-border cursor-pointer rounded-xl p-3 sm:p-5 transition-colors"
                     style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
                   >
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-3 sm:gap-4">
                       <div className="flex-1">
                         <h3 className="mb-2 text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
                           {article.title}
                         </h3>
-                        <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
                           {article.feed_favicon && <img src={article.feed_favicon} alt="" className="h-4 w-4 rounded" />}
                           <span>{article.feed_title}</span>
                           <span>·</span>
@@ -100,7 +100,7 @@ export default function HistoryPage() {
                         )}
                       </div>
                       {article.cover_image && (
-                        <img src={article.cover_image} alt="" className="rounded-lg object-cover" style={{ width: 100, height: 70 }} />
+                        <img src={article.cover_image} alt="" className="hidden sm:block shrink-0 rounded-lg object-cover" style={{ width: 100, height: 70 }} />
                       )}
                     </div>
                   </div>
@@ -112,7 +112,7 @@ export default function HistoryPage() {
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm"
+                  className="flex items-center gap-2 rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 text-sm"
                   style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                 >
                   {loadingMore && <Loader2 size={16} className="animate-spin" />}

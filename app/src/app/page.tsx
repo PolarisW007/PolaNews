@@ -162,7 +162,7 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
           </div>
 
           {article.cover_image && (
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 hidden sm:block">
               <img
                 src={article.cover_image}
                 alt=""
@@ -201,21 +201,19 @@ function ArticleListItem({ article, displayLang }: { article: Article; displayLa
           border: '1px solid var(--border)',
         }}
       >
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <h3
-              className="text-sm font-medium leading-snug"
-              style={{ color: isRead ? 'var(--text-secondary)' : 'var(--text-primary)' }}
-            >
-              {displayTitle}
-            </h3>
-            {showBilingual && (
-              <p className="mt-0.5 text-xs truncate" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
-                {article.title}
-              </p>
-            )}
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
+        <div>
+          <h3
+            className="text-sm font-medium leading-snug"
+            style={{ color: isRead ? 'var(--text-secondary)' : 'var(--text-primary)' }}
+          >
+            {displayTitle}
+          </h3>
+          {showBilingual && (
+            <p className="mt-0.5 text-xs truncate" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+              {article.title}
+            </p>
+          )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>
               {article.feed_title}
             </span>
@@ -526,19 +524,17 @@ export default function HomePage() {
       <div className="flex gap-6">
         {/* 主内容区 */}
         <div className="flex-1 min-w-0">
-          {/* 分类 Tab + 手动抓取 */}
-          <div className="mb-6 flex items-center gap-3">
+          {/* 分类 Tab */}
+          <div className="mb-3 lg:mb-4">
             <div
-              className="flex flex-1 gap-1 overflow-x-auto pb-2"
-              style={{ scrollbarWidth: 'none' }}
+              className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1"
+              style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
             >
               {categories.map((cat) => (
                 <button
                   key={cat.key}
                   onClick={() => setActiveCategory(cat.key)}
-                  className={clsx(
-                    'relative whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-colors',
-                  )}
+                  className="relative whitespace-nowrap rounded-lg px-3 sm:px-4 py-2 text-sm transition-colors"
                   style={{
                     color: activeCategory === cat.key ? 'var(--accent)' : 'var(--text-secondary)',
                     backgroundColor: activeCategory === cat.key ? 'var(--glow)' : 'transparent',
@@ -548,17 +544,16 @@ export default function HomePage() {
                   {activeCategory === cat.key && (
                     <span
                       className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full"
-                      style={{
-                        width: 20,
-                        height: 2,
-                        backgroundColor: 'var(--accent)',
-                      }}
+                      style={{ width: 20, height: 2, backgroundColor: 'var(--accent)' }}
                     />
                   )}
                 </button>
               ))}
             </div>
-            {/* 视图模式切换 */}
+          </div>
+
+          {/* 工具栏 */}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
             <div
               className="flex flex-shrink-0 gap-0.5 rounded-lg p-0.5"
               style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
@@ -582,7 +577,6 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-            {/* 筛选 */}
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all"
@@ -593,9 +587,8 @@ export default function HomePage() {
               }}
             >
               <SlidersHorizontal size={14} />
-              筛选
+              <span className="hidden sm:inline">筛选</span>
             </button>
-            {/* 语言切换 */}
             <div className="relative flex-shrink-0" ref={langMenuRef}>
               <button
                 onClick={() => setShowLangMenu(!showLangMenu)}
@@ -607,7 +600,7 @@ export default function HomePage() {
                 }}
               >
                 <Globe size={14} />
-                {langOptions.find(l => l.key === displayLang)?.label}
+                <span className="hidden sm:inline">{langOptions.find(l => l.key === displayLang)?.label}</span>
                 <ChevronDown size={12} />
               </button>
               {showLangMenu && (
@@ -624,8 +617,6 @@ export default function HomePage() {
                         color: opt.key === displayLang ? 'var(--accent)' : 'var(--text-secondary)',
                         backgroundColor: 'transparent',
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       {opt.label}
                     </button>
@@ -633,11 +624,10 @@ export default function HomePage() {
                 </div>
               )}
             </div>
-            {/* 手动抓取 */}
             <button
               onClick={handleManualFetch}
               disabled={fetching}
-              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all disabled:opacity-60"
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all disabled:opacity-60 ml-auto"
               style={{
                 backgroundColor: fetching ? 'var(--bg-hover)' : 'var(--bg-secondary)',
                 color: fetching ? 'var(--accent)' : 'var(--text-secondary)',
@@ -645,12 +635,8 @@ export default function HomePage() {
               }}
               title="手动抓取所有 RSS 源"
             >
-              {fetching ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
-              {fetching ? '抓取中...' : '抓取'}
+              {fetching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              <span className="hidden sm:inline">{fetching ? '抓取中...' : '抓取'}</span>
             </button>
           </div>
 
@@ -801,7 +787,7 @@ export default function HomePage() {
                     </div>
                   )}
                   {articles.length > 1 && (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       {articles.slice(1).map((article) => (
                         <ArticleMagazineSmall key={article.id} article={article} displayLang={displayLang} />
                       ))}

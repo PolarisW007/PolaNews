@@ -17,6 +17,7 @@ import {
   Share2,
   ChevronDown,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -25,6 +26,11 @@ interface FeedItem {
   title: string;
   category: string;
   favicon_url: string;
+}
+
+interface SidebarProps {
+  open?: boolean;
+  onClose?: () => void;
 }
 
 const mainNavItems = [
@@ -47,7 +53,7 @@ const bottomItems = [
   { href: '/settings', label: '设置', icon: Settings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [feeds, setFeeds] = useState<FeedItem[]>([]);
   const [feedsExpanded, setFeedsExpanded] = useState(false);
@@ -63,6 +69,12 @@ export default function Sidebar() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -85,6 +97,10 @@ export default function Sidebar() {
     });
   };
 
+  const handleNavClick = () => {
+    onClose?.();
+  };
+
   const renderNavItem = (item: { href: string; label: string; icon: React.ComponentType<{ size?: number }> }) => {
     const Icon = item.icon;
     const active = isActive(item.href);
@@ -92,6 +108,7 @@ export default function Sidebar() {
       <li key={item.href}>
         <Link
           href={item.href}
+          onClick={handleNavClick}
           className={clsx(
             'relative flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm transition-colors',
             active ? 'font-medium' : 'hover:opacity-80',
@@ -114,25 +131,25 @@ export default function Sidebar() {
     );
   };
 
-  return (
-    <aside
-      className="fixed left-0 top-0 z-40 flex h-screen flex-col"
-      style={{
-        width: 260,
-        backgroundColor: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border)',
-      }}
-    >
-      <div className="px-6 py-8">
-        <h1
-          className="text-xl font-bold tracking-wide"
-          style={{ color: 'var(--accent)' }}
+  const sidebarContent = (
+    <>
+      <div className="flex items-center justify-between px-6 py-6 lg:py-8">
+        <div>
+          <h1 className="text-xl font-bold tracking-wide" style={{ color: 'var(--accent)' }}>
+            一念三千
+          </h1>
+          <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            全球资讯 AI 聚合
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="lg:hidden flex items-center justify-center rounded-lg p-2 transition-colors"
+          style={{ color: 'var(--text-secondary)' }}
+          aria-label="关闭菜单"
         >
-          一念三千
-        </h1>
-        <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-          全球资讯 AI 聚合
-        </p>
+          <X size={20} />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3">
@@ -140,7 +157,6 @@ export default function Sidebar() {
           {mainNavItems.map(renderNavItem)}
         </ul>
 
-        {/* 用户功能 */}
         <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
           <p className="mb-2 px-4 text-xs font-medium" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
             个人
@@ -150,7 +166,6 @@ export default function Sidebar() {
           </ul>
         </div>
 
-        {/* 信源分组 */}
         {feeds.length > 0 && (
           <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
             <button
@@ -183,6 +198,7 @@ export default function Sidebar() {
                             <li key={f.id}>
                               <Link
                                 href={href}
+                                onClick={handleNavClick}
                                 className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors hover:opacity-80"
                                 style={{
                                   color: active ? 'var(--accent)' : 'var(--text-secondary)',
@@ -212,6 +228,46 @@ export default function Sidebar() {
           {bottomItems.map(renderNavItem)}
         </ul>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside
+        className="hidden lg:flex fixed left-0 top-0 z-40 h-screen flex-col"
+        style={{
+          width: 260,
+          backgroundColor: 'var(--bg-secondary)',
+          borderRight: '1px solid var(--border)',
+        }}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile overlay */}
+      {open && (
+        <div
+          className="lg:hidden fixed inset-0 z-50 bg-black/60"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className={clsx(
+          'lg:hidden fixed left-0 top-0 z-50 h-screen flex-col transition-transform duration-300 ease-in-out',
+          open ? 'translate-x-0 flex' : '-translate-x-full flex',
+        )}
+        style={{
+          width: 280,
+          backgroundColor: 'var(--bg-secondary)',
+          borderRight: '1px solid var(--border)',
+        }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

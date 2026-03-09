@@ -185,9 +185,9 @@ export default function DigestDetailPage() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-4xl px-3 sm:px-5">
         {/* 顶部导航栏 */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-5 sm:mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/digest')}
@@ -197,12 +197,12 @@ export default function DigestDetailPage() {
               <ArrowLeft size={16} />
               返回
             </button>
-            <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-xl sm:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
               {date}
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             {/* 语言切换 */}
             <div
               className="flex gap-1 rounded-lg p-1"
@@ -225,7 +225,7 @@ export default function DigestDetailPage() {
 
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
+              className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm transition-colors"
               style={{
                 background: 'var(--bg-secondary)',
                 color: 'var(--text-secondary)',
@@ -237,7 +237,7 @@ export default function DigestDetailPage() {
             </button>
             <button
               onClick={handleExportPDF}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
+              className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm transition-colors"
               style={{
                 background: 'var(--bg-secondary)',
                 color: 'var(--text-secondary)',
@@ -252,9 +252,9 @@ export default function DigestDetailPage() {
 
         {/* 统计数据 */}
         {stats && (
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mb-5 sm:mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div
-              className="rounded-xl border p-4"
+              className="rounded-xl border p-3 sm:p-5"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
             >
               <div className="flex items-center gap-2">
@@ -266,7 +266,7 @@ export default function DigestDetailPage() {
               </p>
             </div>
             <div
-              className="rounded-xl border p-4"
+              className="rounded-xl border p-3 sm:p-5"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
             >
               <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export default function DigestDetailPage() {
               </p>
             </div>
             <div
-              className="col-span-2 rounded-xl border p-4"
+              className="col-span-2 rounded-xl border p-3 sm:p-5"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
             >
               <div className="mb-2 flex items-center gap-2">
@@ -306,8 +306,8 @@ export default function DigestDetailPage() {
 
         {/* 头条新闻 */}
         {headlines.length > 0 && (
-          <section className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <section className="mb-6 sm:mb-8">
+            <h2 className="mb-3 sm:mb-4 text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
               头条要闻
             </h2>
             <div className="space-y-3">
@@ -316,7 +316,7 @@ export default function DigestDetailPage() {
                 return (
                   <div
                     key={i}
-                    className="glow-border cursor-pointer rounded-xl border p-5 transition-colors"
+                    className="glow-border cursor-pointer rounded-xl border p-3 sm:p-5 transition-colors"
                     style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
                     onClick={() => h.article_id && router.push(`/article/${h.article_id}`)}
                   >
@@ -356,8 +356,8 @@ export default function DigestDetailPage() {
 
         {/* 分类摘要（折叠面板） */}
         {Object.keys(categories).length > 0 && (
-          <section className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <section className="mb-6 sm:mb-8">
+            <h2 className="mb-3 sm:mb-4 text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
               分类摘要
             </h2>
             <div className="space-y-2">
@@ -371,7 +371,7 @@ export default function DigestDetailPage() {
                   >
                     <button
                       onClick={() => toggleCategory(cat)}
-                      className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors"
+                      className="flex w-full items-center justify-between px-3 sm:px-5 py-3 sm:py-4 text-left transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <span
@@ -391,7 +391,7 @@ export default function DigestDetailPage() {
                     </button>
                     {expanded && data.items && (
                       <div
-                        className="border-t px-5 py-4"
+                        className="border-t px-3 sm:px-5 py-3 sm:py-4"
                         style={{ borderColor: 'var(--border)' }}
                       >
                         <div className="space-y-3">
@@ -425,12 +425,12 @@ export default function DigestDetailPage() {
 
         {/* 全文内容（Markdown 渲染） */}
         {digest.full_content && (
-          <section className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <section className="mb-6 sm:mb-8">
+            <h2 className="mb-3 sm:mb-4 text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
               完整内容
             </h2>
             <div
-              className="rounded-xl border p-6"
+              className="rounded-xl border p-3 sm:p-6"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
               dangerouslySetInnerHTML={{ __html: markdownToHtml(digest.full_content) }}
             />
@@ -439,12 +439,12 @@ export default function DigestDetailPage() {
 
         {/* 底部操作区 */}
         <div
-          className="flex flex-wrap justify-center gap-3 border-t py-8"
+          className="flex flex-wrap justify-center gap-2 sm:gap-3 border-t py-6 sm:py-8"
           style={{ borderColor: 'var(--border)' }}
         >
           <button
             onClick={handleGenerateBroadcast}
-            className="flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-black transition-all hover:brightness-110"
+            className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-6 py-2 sm:py-3 text-sm font-medium text-black transition-all hover:brightness-110"
             style={{ background: 'var(--accent)' }}
           >
             <Radio size={16} />
@@ -452,7 +452,7 @@ export default function DigestDetailPage() {
           </button>
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-colors"
+            className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-6 py-2 sm:py-3 text-sm font-medium transition-colors"
             style={{
               background: 'var(--bg-secondary)',
               color: 'var(--accent)',
@@ -464,7 +464,7 @@ export default function DigestDetailPage() {
           </button>
           <button
             onClick={handleExportPDF}
-            className="flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-colors"
+            className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-6 py-2 sm:py-3 text-sm font-medium transition-colors"
             style={{
               background: 'var(--bg-secondary)',
               color: 'var(--accent)',

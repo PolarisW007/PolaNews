@@ -230,7 +230,7 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-50 transition-all"
-      style={{ backgroundColor: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}
+      style={{ backgroundColor: 'var(--bg-secondary)', borderTop: '1px solid var(--border)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="h-1 w-full" style={{ backgroundColor: 'var(--border)' }}>
         <div
@@ -239,61 +239,60 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
         />
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-3">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <button onClick={skipPrev} className="p-2 rounded-lg hover:bg-white/5">
-              <SkipBack size={18} style={{ color: 'var(--text-secondary)' }} />
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button onClick={skipPrev} className="p-1.5 sm:p-2 rounded-lg hover:bg-white/5">
+              <SkipBack size={16} style={{ color: 'var(--text-secondary)' }} />
             </button>
             <button
               onClick={togglePlay}
               disabled={loading || synthLoading}
-              className="p-3 rounded-full"
+              className="p-2.5 sm:p-3 rounded-full"
               style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-primary)' }}
             >
               {loading || synthLoading ? (
-                <Loader2 size={20} className="animate-spin" />
+                <Loader2 size={18} className="animate-spin" />
               ) : isPlaying ? (
-                <Pause size={20} />
+                <Pause size={18} />
               ) : (
-                <Play size={20} className="ml-0.5" />
+                <Play size={18} className="ml-0.5" />
               )}
             </button>
-            <button onClick={skipNext} className="p-2 rounded-lg hover:bg-white/5">
-              <SkipForward size={18} style={{ color: 'var(--text-secondary)' }} />
+            <button onClick={skipNext} className="p-1.5 sm:p-2 rounded-lg hover:bg-white/5">
+              <SkipForward size={16} style={{ color: 'var(--text-secondary)' }} />
             </button>
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+            <p className="text-xs sm:text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
               {title}
             </p>
-            <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-              {currentSegment + 1} / {totalSegments} 段
-              {duration > 0 && ` · ${formatTime(currentTime)} / ${formatTime(duration)}`}
-              {hasAudioUrl && ' · CosyVoice'}
-              {synthLoading && ' · 正在合成...'}
+            <p className="text-[10px] sm:text-xs truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              {currentSegment + 1}/{totalSegments}段
+              {duration > 0 && ` · ${formatTime(currentTime)}/${formatTime(duration)}`}
+              {synthLoading && ' · 合成中'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <button
               onClick={cycleSpeed}
-              className="px-2 py-1 rounded text-xs font-mono"
+              className="px-1.5 sm:px-2 py-1 rounded text-[10px] sm:text-xs font-mono"
               style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--accent)', border: '1px solid var(--border)' }}
             >
               {speed}x
             </button>
 
-            <button onClick={() => setMuted(!muted)} className="p-2 rounded-lg hover:bg-white/5">
+            <button onClick={() => setMuted(!muted)} className="p-1.5 sm:p-2 rounded-lg hover:bg-white/5 hidden sm:block">
               {muted
                 ? <VolumeX size={18} style={{ color: 'var(--text-secondary)' }} />
                 : <Volume2 size={18} style={{ color: 'var(--text-secondary)' }} />}
             </button>
 
-            <button onClick={() => setExpanded(!expanded)} className="p-2 rounded-lg hover:bg-white/5">
+            <button onClick={() => setExpanded(!expanded)} className="p-1.5 sm:p-2 rounded-lg hover:bg-white/5">
               <ChevronUp
-                size={18}
+                size={16}
                 style={{
                   color: 'var(--text-secondary)',
                   transform: expanded ? 'rotate(180deg)' : 'none',
@@ -303,8 +302,8 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
             </button>
 
             {onClose && (
-              <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/5">
-                <X size={18} style={{ color: 'var(--text-secondary)' }} />
+              <button onClick={onClose} className="p-1.5 sm:p-2 rounded-lg hover:bg-white/5">
+                <X size={16} style={{ color: 'var(--text-secondary)' }} />
               </button>
             )}
           </div>

@@ -171,10 +171,10 @@ export default function BroadcastDetailPage() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-3xl" style={{ paddingBottom: showPlayer ? 120 : 0 }}>
+      <div className="mx-auto max-w-3xl" style={{ paddingBottom: showPlayer ? 140 : 0 }}>
         <button
           onClick={() => router.push('/broadcast')}
-          className="mb-6 flex items-center gap-2 text-sm transition-colors hover:underline"
+          className="mb-4 sm:mb-6 flex items-center gap-2 text-sm transition-colors hover:underline"
           style={{ color: 'var(--accent)' }}
         >
           <ArrowLeft size={16} />
@@ -182,12 +182,12 @@ export default function BroadcastDetailPage() {
         </button>
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
             {broadcast.broadcast_date} 新闻播报
           </h1>
           <div
-            className="mt-2 flex items-center gap-4 text-sm"
+            className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm"
             style={{ color: 'var(--text-secondary)' }}
           >
             <span className="flex items-center gap-1">

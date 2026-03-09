@@ -160,10 +160,10 @@ export default function SettingsPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-2xl mx-auto animate-fade-in">
-        <div className="flex items-center gap-3 mb-8">
-          <Settings size={24} style={{ color: 'var(--accent)' }} />
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+      <div className="max-w-2xl mx-auto px-3 sm:px-5 animate-fade-in">
+        <div className="flex items-center gap-3 mb-5 sm:mb-8">
+          <Settings size={24} style={{ color: 'var(--accent)' }} className="shrink-0" />
+          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
             个人设置
           </h1>
         </div>
@@ -171,10 +171,10 @@ export default function SettingsPage() {
         <div className="space-y-6">
           {/* 基本信息 */}
           <section
-            className="rounded-xl p-6"
+            className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-5" style={{ color: 'var(--accent)' }}>
+            <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider mb-4 sm:mb-5" style={{ color: 'var(--accent)' }}>
               基本信息
             </h2>
             <div className="space-y-4">
@@ -186,7 +186,7 @@ export default function SettingsPage() {
                   type="text"
                   value={settings.display_name}
                   onChange={e => setSettings({ ...settings, display_name: e.target.value })}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm outline-none"
+                  className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm outline-none"
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                 />
               </div>
@@ -198,7 +198,7 @@ export default function SettingsPage() {
                   type="email"
                   value={settings.email}
                   readOnly
-                  className="w-full rounded-lg px-4 py-2.5 text-sm outline-none opacity-60 cursor-not-allowed"
+                  className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm outline-none opacity-60 cursor-not-allowed"
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
                 />
               </div>
@@ -207,13 +207,13 @@ export default function SettingsPage() {
 
           {/* 语言偏好 */}
           <section
-            className="rounded-xl p-6"
+            className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-5" style={{ color: 'var(--accent)' }}>
+            <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider mb-4 sm:mb-5" style={{ color: 'var(--accent)' }}>
               语言偏好
             </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                   界面语言
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                 <select
                   value={settings.language}
                   onChange={e => setSettings({ ...settings, language: e.target.value })}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm outline-none"
+                  className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm outline-none"
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                 >
                   {LANGUAGES.map(l => (
@@ -236,7 +236,7 @@ export default function SettingsPage() {
                 <select
                   value={settings.digest_language}
                   onChange={e => setSettings({ ...settings, digest_language: e.target.value })}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm outline-none"
+                  className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm outline-none"
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                 >
                   {LANGUAGES.map(l => (
@@ -249,13 +249,13 @@ export default function SettingsPage() {
 
           {/* 主题 */}
           <section
-            className="rounded-xl p-6"
+            className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-5" style={{ color: 'var(--accent)' }}>
+            <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider mb-4 sm:mb-5" style={{ color: 'var(--accent)' }}>
               主题
             </h2>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {THEMES.map(t => (
                 <button
                   key={t.value}
@@ -263,7 +263,7 @@ export default function SettingsPage() {
                     setSettings({ ...settings, theme: t.value });
                     applyTheme(t.value);
                   }}
-                  className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all"
+                  className="flex-1 min-w-0 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium transition-all"
                   style={{
                     backgroundColor: settings.theme === t.value ? 'var(--accent)' : 'var(--bg-primary)',
                     color: settings.theme === t.value ? 'var(--bg-primary)' : 'var(--text-secondary)',
@@ -278,20 +278,20 @@ export default function SettingsPage() {
 
           {/* Digest 推送时间 */}
           <section
-            className="rounded-xl p-6"
+            className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-5" style={{ color: 'var(--accent)' }}>
+            <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider mb-4 sm:mb-5" style={{ color: 'var(--accent)' }}>
               Digest 推送时间
             </h2>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {DIGEST_TIMES.map(time => {
                 const active = settings.digest_times.includes(time);
                 return (
                   <button
                     key={time}
                     onClick={() => toggleDigestTime(time)}
-                    className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm transition-all"
+                    className="flex shrink-0 items-center gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm transition-all"
                     style={{
                       backgroundColor: active ? 'rgba(0,230,118,0.1)' : 'var(--bg-primary)',
                       color: active ? 'var(--accent)' : 'var(--text-secondary)',
@@ -308,20 +308,20 @@ export default function SettingsPage() {
 
           {/* 关注分类 */}
           <section
-            className="rounded-xl p-6"
+            className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <h2 className="text-sm font-medium uppercase tracking-wider mb-5" style={{ color: 'var(--accent)' }}>
+            <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider mb-4 sm:mb-5" style={{ color: 'var(--accent)' }}>
               关注分类
             </h2>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {CATEGORIES.map(cat => {
                 const active = settings.followed_categories.includes(cat.value);
                 return (
                   <button
                     key={cat.value}
                     onClick={() => toggleCategory(cat.value)}
-                    className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm transition-all"
+                    className="flex shrink-0 items-center gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm transition-all"
                     style={{
                       backgroundColor: active ? 'rgba(0,230,118,0.1)' : 'var(--bg-primary)',
                       color: active ? 'var(--accent)' : 'var(--text-secondary)',
@@ -337,10 +337,10 @@ export default function SettingsPage() {
           </section>
           {/* 修改密码 */}
           <section
-            className="rounded-xl p-6"
+            className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 mb-4 sm:mb-5">
               <Lock size={16} style={{ color: 'var(--accent)' }} />
               <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
                 修改密码
@@ -355,7 +355,7 @@ export default function SettingsPage() {
                     value={oldPassword}
                     onChange={e => setOldPassword(e.target.value)}
                     placeholder="输入当前密码"
-                    className="w-full rounded-lg px-4 py-2.5 pr-10 text-sm outline-none"
+                    className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 pr-10 text-sm outline-none"
                     style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                   />
                   <button
@@ -375,7 +375,7 @@ export default function SettingsPage() {
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
                     placeholder="至少 6 位"
-                    className="w-full rounded-lg px-4 py-2.5 pr-10 text-sm outline-none"
+                    className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 pr-10 text-sm outline-none"
                     style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                   />
                   <button
@@ -394,14 +394,14 @@ export default function SettingsPage() {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder="再次输入新密码"
-                  className="w-full rounded-lg px-4 py-2.5 text-sm outline-none"
+                  className="w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm outline-none"
                   style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                 />
               </div>
               <button
                 onClick={handleChangePassword}
                 disabled={changingPassword || !oldPassword || !newPassword || !confirmPassword}
-                className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg px-3 sm:px-5 py-2 sm:py-2.5 text-sm font-medium disabled:opacity-50"
                 style={{ background: 'var(--accent)', color: '#000' }}
               >
                 {changingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
@@ -412,11 +412,11 @@ export default function SettingsPage() {
         </div>
 
         {/* 保存按钮 */}
-        <div className="mt-8 flex items-center gap-4">
+        <div className="mt-6 sm:mt-8 flex flex-wrap items-center gap-3">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-lg px-8 py-3 text-sm font-medium"
+            className="flex shrink-0 items-center gap-2 rounded-lg px-4 sm:px-8 py-2 sm:py-3 text-sm font-medium"
             style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-primary)' }}
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : '保存设置'}

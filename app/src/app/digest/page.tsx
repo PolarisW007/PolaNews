@@ -50,20 +50,20 @@ export default function DigestListPage() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center justify-between">
+      <div className="mx-auto max-w-3xl px-3 sm:px-5">
+        <div className="mb-5 sm:mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-xl sm:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
               每日资讯摘要
             </h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <p className="mt-1 text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
               AI 为你整理的每日全球要闻
             </p>
           </div>
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
+            className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
             style={{ background: 'var(--accent)' }}
           >
             {generating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -81,7 +81,7 @@ export default function DigestListPage() {
             style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
           >
             <Newspaper size={40} className="mb-4" style={{ color: 'var(--text-secondary)' }} />
-            <p className="mb-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <p className="mb-2 text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
               暂无摘要
             </p>
             <p className="mb-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -90,7 +90,7 @@ export default function DigestListPage() {
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 disabled:opacity-60"
               style={{ background: 'var(--accent)' }}
             >
               {generating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -103,7 +103,7 @@ export default function DigestListPage() {
               <button
                 key={digest.id}
                 onClick={() => router.push(`/digest/${digest.digest_date}`)}
-                className="glow-border group flex w-full items-center gap-4 rounded-xl border p-5 text-left transition-colors"
+                className="glow-border group flex w-full items-center gap-3 sm:gap-4 rounded-xl border p-3 sm:p-5 text-left transition-colors"
                 style={{
                   background: 'var(--bg-secondary)',
                   borderColor: 'var(--border)',
@@ -123,7 +123,7 @@ export default function DigestListPage() {
                   >
                     {digest.digest_date} 资讯摘要
                   </h3>
-                  <div className="mt-1 flex items-center gap-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     <span className="flex items-center gap-1">
                       <Globe size={12} />
                       {langLabels[digest.language] || digest.language}
@@ -138,7 +138,7 @@ export default function DigestListPage() {
                 </div>
 
                 <span
-                  className="rounded-full px-3 py-1 text-xs"
+                  className="shrink-0 rounded-full px-3 py-1 text-xs"
                   style={{
                     background: 'rgba(0,230,118,0.08)',
                     color: 'var(--accent-secondary)',

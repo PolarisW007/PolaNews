@@ -284,22 +284,23 @@ export default function ShareHistoryPage() {
   return (
     <MainLayout>
       <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-5 sm:mb-8 flex items-start sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-xl sm:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
               分享历史
             </h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <p className="mt-1 text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
               AI 生成的社交平台分享文案
             </p>
           </div>
           <button
             onClick={handleOpenModal}
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110"
+            className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium text-black transition-all hover:brightness-110 shrink-0"
             style={{ background: 'var(--accent)' }}
           >
             <Plus size={16} />
-            生成新分享
+            <span className="hidden sm:inline">生成新分享</span>
+            <span className="sm:hidden">新建</span>
           </button>
         </div>
 
@@ -355,7 +356,7 @@ export default function ShareHistoryPage() {
                 <button
                   key={share.id}
                   onClick={() => setDetailShare(share)}
-                  className="glow-border group flex w-full items-start gap-4 rounded-xl border p-5 text-left transition-colors"
+                  className="glow-border group flex w-full items-start gap-3 sm:gap-4 rounded-xl border p-3 sm:p-5 text-left transition-colors"
                   style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ background: pColor.bg }}>
@@ -410,12 +411,12 @@ export default function ShareHistoryPage() {
         {/* Detail Modal */}
         {detailShare && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
             style={{ background: 'rgba(0,0,0,0.6)' }}
             onClick={() => setDetailShare(null)}
           >
             <div
-              className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border p-6"
+              className="relative max-h-[92vh] sm:max-h-[85vh] w-full sm:max-w-lg overflow-y-auto rounded-t-2xl sm:rounded-xl border p-4 sm:p-6"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -544,12 +545,12 @@ export default function ShareHistoryPage() {
         {/* Generate Modal */}
         {showModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
             style={{ background: 'rgba(0,0,0,0.6)' }}
             onClick={() => setShowModal(false)}
           >
             <div
-              className="relative w-full max-w-md rounded-xl border p-6"
+              className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-xl border p-4 sm:p-6 max-h-[85vh] overflow-y-auto"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
               onClick={(e) => e.stopPropagation()}
             >

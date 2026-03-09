@@ -492,37 +492,37 @@ export default function ArticlePage() {
 
   return (
     <MainLayout>
-      <div className={`mx-auto flex gap-8 ${isBilingualActive ? 'max-w-[1600px]' : 'max-w-[1200px]'}`}>
+      <div className={`mx-auto flex flex-col lg:flex-row gap-6 lg:gap-8 ${isBilingualActive ? 'max-w-[1600px]' : 'max-w-[1200px]'}`}>
         {/* 主内容区 */}
         <article className="min-w-0 flex-1" style={{ maxWidth: isBilingualActive ? undefined : 800 }}>
-          <div className="mb-6 flex items-center gap-2">
+          <div className="mb-4 sm:mb-6 flex items-center gap-1 sm:gap-2">
             <button
               onClick={() => router.back()}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors hover:opacity-80"
+              className="flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-sm transition-colors hover:opacity-80"
               style={{ color: 'var(--text-secondary)' }}
             >
               <ArrowLeft size={16} />
-              返回
+              <span className="hidden sm:inline">返回</span>
             </button>
-            <div className="mx-1 h-4 w-px" style={{ background: 'var(--border)' }} />
+            <div className="mx-0.5 sm:mx-1 h-4 w-px" style={{ background: 'var(--border)' }} />
             <button
               onClick={() => prevArticle && router.push(`/article/${prevArticle.id}`)}
               disabled={!prevArticle}
-              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-all disabled:opacity-30"
+              className="flex items-center gap-1 rounded-lg px-2 sm:px-3 py-1.5 text-sm transition-all disabled:opacity-30"
               style={{ color: prevArticle ? 'var(--text-secondary)' : 'var(--text-disabled)' }}
               title={prevArticle ? `上一篇: ${prevArticle.title_zh || prevArticle.title}` : '没有上一篇了'}
             >
               <ChevronLeft size={16} />
-              上一篇
+              <span className="hidden sm:inline">上一篇</span>
             </button>
             <button
               onClick={() => nextArticle && router.push(`/article/${nextArticle.id}`)}
               disabled={!nextArticle}
-              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-all disabled:opacity-30"
+              className="flex items-center gap-1 rounded-lg px-2 sm:px-3 py-1.5 text-sm transition-all disabled:opacity-30"
               style={{ color: nextArticle ? 'var(--text-secondary)' : 'var(--text-disabled)' }}
               title={nextArticle ? `下一篇: ${nextArticle.title_zh || nextArticle.title}` : '没有下一篇了'}
             >
-              下一篇
+              <span className="hidden sm:inline">下一篇</span>
               <ChevronRight size={16} />
             </button>
           </div>
@@ -631,13 +631,13 @@ export default function ArticlePage() {
 
           {/* 操作栏 */}
           <div
-            className="mb-8 flex flex-wrap items-center gap-2.5"
-            style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}
+            className="mb-6 sm:mb-8 flex flex-wrap items-center gap-1.5 sm:gap-2.5"
+            style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}
           >
             <button
               onClick={handleSummarize}
               disabled={summarizing}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
                 background: 'rgba(0,230,118,0.12)',
                 color: 'var(--accent)',
@@ -645,12 +645,12 @@ export default function ArticlePage() {
               }}
             >
               {summarizing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              AI 摘要
+              <span className="hidden sm:inline">AI 摘要</span>
             </button>
             <button
               onClick={handleTTS}
               disabled={ttsLoading}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
                 background: isSpeaking ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
                 color: isSpeaking ? 'var(--accent)' : 'var(--text-secondary)',
@@ -659,7 +659,7 @@ export default function ArticlePage() {
               title={isSpeaking ? '停止朗读' : (ttsPreloading ? '音频准备中…' : (preloadedAudioUrl ? '点击即可播放' : '朗读中文摘要'))}
             >
               {ttsLoading ? <Loader2 size={16} className="animate-spin" /> : isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-              {ttsLoading ? '合成中...' : isSpeaking ? '停止朗读' : ttsPreloading ? '准备中…' : '朗读摘要'}
+              <span className="hidden sm:inline">{ttsLoading ? '合成中...' : isSpeaking ? '停止朗读' : ttsPreloading ? '准备中…' : '朗读摘要'}</span>
               {preloadedAudioUrl && !isSpeaking && !ttsLoading && (
                 <span className="ml-1 h-2 w-2 rounded-full bg-green-400" title="音频已就绪" />
               )}
@@ -667,7 +667,7 @@ export default function ArticlePage() {
             <button
               onClick={handleBilingualToggle}
               disabled={translating}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
                 background: bilingualMode ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
                 color: bilingualMode ? 'var(--accent)' : 'var(--text-secondary)',
@@ -675,9 +675,9 @@ export default function ArticlePage() {
               }}
             >
               {translating ? <Loader2 size={16} className="animate-spin" /> : <Languages size={16} />}
-              中英对照
+              <span className="hidden sm:inline">中英对照</span>
             </button>
-            <div className="mx-1 h-5 w-px" style={{ background: 'var(--border)' }} />
+            <div className="hidden sm:block mx-1 h-5 w-px" style={{ background: 'var(--border)' }} />
             <button
               onClick={async () => {
                 try {
@@ -687,7 +687,7 @@ export default function ArticlePage() {
                   setStarred(data.is_starred);
                 } catch { toast('收藏操作失败', 'error'); }
               }}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
                 background: starred ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
                 color: starred ? 'var(--accent)' : 'var(--text-secondary)',
@@ -695,7 +695,7 @@ export default function ArticlePage() {
               }}
             >
               <Star size={16} fill={starred ? 'currentColor' : 'none'} />
-              收藏
+              <span className="hidden sm:inline">收藏</span>
             </button>
             <button
               onClick={async () => {
@@ -706,7 +706,7 @@ export default function ArticlePage() {
                   setSaved(data.is_saved);
                 } catch { toast('保存操作失败', 'error'); }
               }}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
                 background: saved ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
                 color: saved ? 'var(--accent)' : 'var(--text-secondary)',
@@ -714,11 +714,11 @@ export default function ArticlePage() {
               }}
             >
               <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
-              稍后阅读
+              <span className="hidden sm:inline">稍后阅读</span>
             </button>
             <button
               onClick={handleShare}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
                 background: 'var(--bg-secondary)',
                 color: 'var(--text-secondary)',
@@ -726,7 +726,7 @@ export default function ArticlePage() {
               }}
             >
               <Share2 size={16} />
-              分享
+              <span className="hidden sm:inline">分享</span>
             </button>
             {article.url && (
               <a
@@ -791,7 +791,7 @@ export default function ArticlePage() {
                   关闭对照
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                 <div>
                   <div className="mb-2 text-xs font-medium" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
                     English Original
@@ -930,11 +930,10 @@ export default function ArticlePage() {
           {/* 上一篇 / 下一篇 底部导航 */}
           {(prevArticle || nextArticle) && (
             <div
-              className="mt-10 grid gap-4"
+              className="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4"
               style={{
-                gridTemplateColumns: prevArticle && nextArticle ? '1fr 1fr' : '1fr',
                 borderTop: '1px solid var(--border)',
-                paddingTop: '1.5rem',
+                paddingTop: '1.25rem',
               }}
             >
               {prevArticle && (
@@ -983,8 +982,8 @@ export default function ArticlePage() {
           )}
         </article>
 
-        {/* 右侧面板（中英对照模式下隐藏，把空间让给双栏内容） */}
-        <aside className={`w-80 shrink-0 lg:block ${isBilingualActive ? 'hidden' : 'hidden lg:block'}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
+        {/* 右侧面板（移动端在文章下方显示，桌面端侧栏固定；中英对照模式下完全隐藏） */}
+        <aside className={`w-full lg:w-80 shrink-0 ${isBilingualActive ? 'hidden' : 'block'}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
           <div
             className="rounded-xl border p-5"
             style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}

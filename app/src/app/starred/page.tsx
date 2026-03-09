@@ -64,22 +64,24 @@ export default function StarredPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-4xl mx-auto animate-fade-in">
-        <div className="flex items-center gap-3 mb-1">
-          <Star size={24} style={{ color: 'var(--accent)' }} />
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            我的收藏
-          </h1>
+      <div className="max-w-4xl mx-auto px-3 sm:px-5 animate-fade-in">
+        <div className="mb-5 sm:mb-8">
+          <div className="flex items-center gap-3 mb-1">
+            <Star size={24} style={{ color: 'var(--accent)' }} className="shrink-0" />
+            <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+              我的收藏
+            </h1>
+          </div>
+          <p className="text-xs sm:text-sm" style={{ color: 'var(--text-secondary)' }}>
+            共 {total} 篇收藏
+          </p>
         </div>
-        <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>
-          共 {total} 篇收藏
-        </p>
 
         <div className="space-y-3">
           {articles.map(article => (
             <div
               key={article.id}
-              className="flex items-start gap-4 rounded-xl p-5 glow-border"
+              className="flex flex-wrap items-start gap-3 sm:gap-4 rounded-xl p-3 sm:p-5 glow-border"
               style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
             >
               <Link href={`/article/${article.article_id || article.id}`} className="flex-1 min-w-0 cursor-pointer">
@@ -89,14 +91,14 @@ export default function StarredPage() {
                 <p className="text-xs mt-2 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                   {(article.summary || '').slice(0, 150)}
                 </p>
-                <div className="flex items-center gap-3 mt-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3">
                   <span className="text-xs" style={{ color: 'var(--accent-secondary)' }}>{article.feed_title}</span>
                   <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{formatTime(article.published_at)}</span>
                 </div>
               </Link>
               <button
                 onClick={() => handleUnstar(article.article_id || article.id)}
-                className="flex-shrink-0 rounded-lg px-3 py-1.5 text-xs transition-all"
+                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs transition-all"
                 style={{ backgroundColor: 'rgba(255,82,82,0.1)', color: 'var(--danger)', border: '1px solid rgba(255,82,82,0.2)' }}
               >
                 取消收藏
@@ -115,7 +117,7 @@ export default function StarredPage() {
           <div className="flex justify-center py-6">
             <button
               onClick={() => setPage(p => p + 1)}
-              className="rounded-lg px-6 py-2.5 text-sm"
+              className="rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 text-sm"
               style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
             >
               加载更多
