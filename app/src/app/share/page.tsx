@@ -13,6 +13,9 @@ import {
   Filter,
   RefreshCw,
   Image as ImageIcon,
+  Link2,
+  ExternalLink,
+  Twitter,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
@@ -29,6 +32,7 @@ interface SocialShare {
   content: string;
   cover_url: string;
   images: string;
+  image_status: string;
   language: string;
   template_id: string;
   created_at: string;
@@ -40,16 +44,30 @@ interface Digest {
   language: string;
 }
 
-type Platform = '' | 'xiaohongshu' | 'wechat_moments';
+type Platform = '' | 'xiaohongshu' | 'wechat_moments' | 'x';
+type ModalPlatform = 'xiaohongshu' | 'wechat_moments' | 'x';
+
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
 const platformLabels: Record<string, string> = {
   xiaohongshu: '小红书',
   wechat_moments: '朋友圈',
+  x: 'X (Twitter)',
 };
 
 const platformColors: Record<string, { bg: string; text: string }> = {
   xiaohongshu: { bg: 'rgba(255,45,85,0.1)', text: '#FF6B81' },
   wechat_moments: { bg: 'rgba(7,193,96,0.1)', text: '#07C160' },
+  x: { bg: 'rgba(29,161,242,0.1)', text: '#1DA1F2' },
+};
+
+const PlatformIcon = ({ platform, size = 18, color }: { platform: string; size?: number; color?: string }) => {
+  switch (platform) {
+    case 'xiaohongshu': return <BookOpen size={size} style={{ color }} />;
+    case 'wechat_moments': return <MessageCircle size={size} style={{ color }} />;
+    case 'x': return <Twitter size={size} style={{ color }} />;
+    default: return <Share2 size={size} style={{ color }} />;
+  }
 };
 
 export default function ShareHistoryPage() {
@@ -58,11 +76,11 @@ export default function ShareHistoryPage() {
   const [activeTab, setActiveTab] = useState<Platform>('');
   const [showModal, setShowModal] = useState(false);
   const [detailShare, setDetailShare] = useState<SocialShare | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string>('');
 
   const [generating, setGenerating] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-  const [modalPlatform, setModalPlatform] = useState<'xiaohongshu' | 'wechat_moments'>('xiaohongshu');
+  const [modalPlatform, setModalPlatform] = useState<ModalPlatform>('xiaohongshu');
   const [digests, setDigests] = useState<Digest[]>([]);
   const [selectedDigestId, setSelectedDigestId] = useState('');
   const { toast } = useToast();
@@ -70,7 +88,7 @@ export default function ShareHistoryPage() {
   const fetchShares = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.shares.list(1, 20, activeTab) as { shares: SocialShare[] };
+      const data = await api.shares.list(1, 50, activeTab) as { shares: SocialShare[] };
       setShares(data.shares || []);
     } catch (e) {
       toast(e instanceof Error ? e.message : '获取分享列表失败', 'error');
@@ -114,12 +132,12 @@ export default function ShareHistoryPage() {
     }
   };
 
-  const handleCopy = async (text: string) => {
+  const handleCopy = async (text: string, type = 'content') => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast('文案已复制到剪贴板', 'success');
-      setTimeout(() => setCopied(false), 2000);
+      setCopied(type);
+      toast(type === 'link' ? '链接已复制' : '文案已复制到剪贴板', 'success');
+      setTimeout(() => setCopied(''), 2000);
     } catch {
       toast('复制失败，请手动选择复制', 'error');
     }
@@ -144,16 +162,34 @@ export default function ShareHistoryPage() {
     }
   };
 
+  const getPublicUrl = (shareId: string) => {
+    const host = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${host}${basePath}/share/${shareId}/public`;
+  };
+
+  const parseImages = (imagesStr: string) => {
+    try {
+      if (!imagesStr) return [];
+      const parsed = JSON.parse(imagesStr);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item: string | { url: string }) =>
+          typeof item === 'string' ? item : item.url
+        ).filter(Boolean);
+      }
+      return [];
+    } catch { return []; }
+  };
+
   const tabs: { key: Platform; label: string }[] = [
     { key: '', label: '全部' },
     { key: 'xiaohongshu', label: '小红书' },
     { key: 'wechat_moments', label: '朋友圈' },
+    { key: 'x', label: 'X' },
   ];
 
   return (
     <MainLayout>
       <div className="mx-auto max-w-3xl">
-        {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -173,7 +209,6 @@ export default function ShareHistoryPage() {
           </button>
         </div>
 
-        {/* Tabs */}
         <div
           className="mb-6 flex gap-1 rounded-lg border p-1"
           style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
@@ -193,7 +228,6 @@ export default function ShareHistoryPage() {
           ))}
         </div>
 
-        {/* List */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent)' }} />
@@ -204,9 +238,7 @@ export default function ShareHistoryPage() {
             style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
           >
             <Share2 size={40} className="mb-4" style={{ color: 'var(--text-secondary)' }} />
-            <p className="mb-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              暂无分享记录
-            </p>
+            <p className="mb-2 text-sm" style={{ color: 'var(--text-secondary)' }}>暂无分享记录</p>
             <p className="mb-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
               点击"生成新分享"为社交平台创建精彩文案
             </p>
@@ -222,10 +254,9 @@ export default function ShareHistoryPage() {
         ) : (
           <div className="space-y-3">
             {shares.map((share) => {
-              const pColor = platformColors[share.platform] || {
-                bg: 'rgba(0,230,118,0.08)',
-                text: 'var(--accent-secondary)',
-              };
+              const pColor = platformColors[share.platform] || { bg: 'rgba(0,230,118,0.08)', text: 'var(--accent-secondary)' };
+              const imgs = parseImages(share.images);
+
               return (
                 <button
                   key={share.id}
@@ -233,15 +264,8 @@ export default function ShareHistoryPage() {
                   className="glow-border group flex w-full items-start gap-4 rounded-xl border p-5 text-left transition-colors"
                   style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
                 >
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: pColor.bg }}
-                  >
-                    {share.platform === 'xiaohongshu' ? (
-                      <BookOpen size={18} style={{ color: pColor.text }} />
-                    ) : (
-                      <MessageCircle size={18} style={{ color: pColor.text }} />
-                    )}
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ background: pColor.bg }}>
+                    <PlatformIcon platform={share.platform} color={pColor.text} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center gap-2">
@@ -251,68 +275,31 @@ export default function ShareHistoryPage() {
                       >
                         {platformLabels[share.platform] || share.platform}
                       </span>
+                      {share.image_status === 'generating' && (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
+                          <Loader2 size={10} className="animate-spin" /> 图片生成中
+                        </span>
+                      )}
                     </div>
-                    <h3
-                      className="text-sm font-medium group-hover:underline"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
+                    <h3 className="text-sm font-medium group-hover:underline" style={{ color: 'var(--text-primary)' }}>
                       {share.title || '无标题'}
                     </h3>
-                    <p
-                      className="mt-1 line-clamp-2 text-xs"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <p className="mt-1 line-clamp-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {share.content?.slice(0, 120)}
                     </p>
 
-                    {/* 封面图预览 */}
-                    {share.cover_url && (
-                      <div className="mt-2">
-                        <img
-                          src={share.cover_url}
-                          alt="封面"
-                          className="h-20 w-32 rounded-lg object-cover"
-                        />
+                    {(share.cover_url || imgs.length > 0) && (
+                      <div className="mt-2 flex gap-1.5 overflow-hidden">
+                        {share.cover_url && (
+                          <img src={share.cover_url} alt="封面" className="h-16 w-24 rounded-lg object-cover" style={{ border: '1px solid var(--border)' }} />
+                        )}
+                        {imgs.slice(0, 3).map((img, i) => (
+                          <img key={i} src={img} alt="" className="h-16 w-16 rounded-lg object-cover" style={{ border: '1px solid var(--border)' }} />
+                        ))}
                       </div>
                     )}
 
-                    {/* 图片缩略图 */}
-                    {share.images && (() => {
-                      try {
-                        const imgs = JSON.parse(share.images) as string[];
-                        if (imgs.length > 0) {
-                          return (
-                            <div className="mt-2 flex gap-1.5 overflow-hidden">
-                              {imgs.slice(0, 4).map((img, i) => (
-                                <img
-                                  key={i}
-                                  src={img}
-                                  alt=""
-                                  className="h-12 w-12 rounded object-cover"
-                                  style={{ border: '1px solid var(--border)' }}
-                                />
-                              ))}
-                              {imgs.length > 4 && (
-                                <div
-                                  className="flex h-12 w-12 items-center justify-center rounded text-xs"
-                                  style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                                >
-                                  +{imgs.length - 4}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }
-                        return null;
-                      } catch {
-                        return null;
-                      }
-                    })()}
-
-                    <span
-                      className="mt-2 inline-block text-xs"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <span className="mt-2 inline-block text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {format(new Date(share.created_at), 'yyyy-MM-dd HH:mm')}
                     </span>
                   </div>
@@ -330,7 +317,7 @@ export default function ShareHistoryPage() {
             onClick={() => setDetailShare(null)}
           >
             <div
-              className="relative max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl border p-6"
+              className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border p-6"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -361,78 +348,78 @@ export default function ShareHistoryPage() {
                 {detailShare.title || '无标题'}
               </h2>
 
-              {/* 封面图 */}
               {detailShare.cover_url && (
                 <div className="mb-4 overflow-hidden rounded-lg">
-                  <img
-                    src={detailShare.cover_url}
-                    alt="封面"
-                    className="w-full rounded-lg object-cover"
-                    style={{ maxHeight: 240 }}
-                  />
+                  <img src={detailShare.cover_url} alt="封面" className="w-full rounded-lg object-cover" style={{ maxHeight: 280 }} />
                 </div>
               )}
 
               <div
                 className="mb-4 whitespace-pre-wrap rounded-lg border p-4 text-sm leading-relaxed"
-                style={{
-                  background: 'var(--bg-primary)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                }}
+                style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
                 {detailShare.content}
               </div>
 
-              {/* 图片缩略图 */}
-              {detailShare.images && (() => {
-                try {
-                  const imgs = JSON.parse(detailShare.images) as string[];
-                  if (imgs.length > 0) {
-                    return (
-                      <div className="mb-5">
-                        <div className="mb-2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          <ImageIcon size={12} />
-                          配图 ({imgs.length})
-                        </div>
-                        <div className="grid grid-cols-4 gap-2">
-                          {imgs.map((img, i) => (
-                            <img
-                              key={i}
-                              src={img}
-                              alt=""
-                              className="aspect-square w-full rounded-lg object-cover"
-                              style={{ border: '1px solid var(--border)' }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                } catch {
-                  return null;
-                }
+              {(() => {
+                const imgs = parseImages(detailShare.images);
+                if (imgs.length === 0) return null;
+                return (
+                  <div className="mb-5">
+                    <div className="mb-2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      <ImageIcon size={12} />
+                      AI 生成配图 ({imgs.length})
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {imgs.map((img, i) => (
+                        <img key={i} src={img} alt="" className="w-full rounded-lg object-cover" style={{ border: '1px solid var(--border)' }} />
+                      ))}
+                    </div>
+                  </div>
+                );
               })()}
+
+              {/* Public link */}
+              <div className="mb-4 flex items-center gap-2 rounded-lg border p-3" style={{ background: 'rgba(0,255,136,0.03)', borderColor: 'var(--border)' }}>
+                <Link2 size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span className="flex-1 truncate text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {getPublicUrl(detailShare.id)}
+                </span>
+                <button
+                  onClick={() => handleCopy(getPublicUrl(detailShare.id), 'link')}
+                  className="flex shrink-0 items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium transition-all"
+                  style={{ background: 'var(--accent)', color: '#000' }}
+                >
+                  {copied === 'link' ? <><Check size={12} /> 已复制</> : <><Copy size={12} /> 复制链接</>}
+                </button>
+              </div>
+
+              {/* Open public page */}
+              <a
+                href={getPublicUrl(detailShare.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-4 flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
+                style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
+              >
+                <ExternalLink size={14} />
+                打开对外分享页
+              </a>
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleCopy(detailShare.content)}
+                  onClick={() => handleCopy(detailShare.content, 'content')}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-black transition-all hover:brightness-110"
                   style={{ background: 'var(--accent)' }}
                 >
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                  {copied ? '已复制' : '一键复制文案'}
+                  {copied === 'content' ? <Check size={16} /> : <Copy size={16} />}
+                  {copied === 'content' ? '已复制' : '一键复制文案'}
                 </button>
                 <button
                   onClick={() => handleRegenerate(detailShare)}
                   disabled={regenerating}
                   className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all hover:brightness-110"
-                  style={{
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border)',
-                  }}
+                  style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
                 >
                   {regenerating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                   重新生成
@@ -466,28 +453,42 @@ export default function ShareHistoryPage() {
                 生成社交分享
               </h2>
 
-              {/* Platform selection */}
               <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                 选择平台
               </label>
-              <div className="mb-4 flex gap-2">
-                {(['xiaohongshu', 'wechat_moments'] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setModalPlatform(p)}
-                    className="flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors"
-                    style={{
-                      borderColor: modalPlatform === p ? 'var(--accent)' : 'var(--border)',
-                      background: modalPlatform === p ? 'rgba(0,230,118,0.08)' : 'transparent',
-                      color: modalPlatform === p ? 'var(--accent)' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {platformLabels[p]}
-                  </button>
-                ))}
+              <div className="mb-4 grid grid-cols-3 gap-2">
+                {(['xiaohongshu', 'wechat_moments', 'x'] as const).map((p) => {
+                  const pColor = platformColors[p];
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setModalPlatform(p)}
+                      className="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-xs font-medium transition-colors"
+                      style={{
+                        borderColor: modalPlatform === p ? pColor.text : 'var(--border)',
+                        background: modalPlatform === p ? pColor.bg : 'transparent',
+                        color: modalPlatform === p ? pColor.text : 'var(--text-secondary)',
+                      }}
+                    >
+                      <PlatformIcon platform={p} size={20} color={modalPlatform === p ? pColor.text : 'var(--text-secondary)'} />
+                      {platformLabels[p]}
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Digest selection */}
+              {modalPlatform === 'x' && (
+                <p className="mb-4 rounded-lg border p-3 text-xs" style={{ background: 'rgba(29,161,242,0.05)', borderColor: 'rgba(29,161,242,0.2)', color: '#1DA1F2' }}>
+                  X 平台将同时生成英文和中文双语版本
+                </p>
+              )}
+
+              {modalPlatform === 'xiaohongshu' && (
+                <p className="mb-4 rounded-lg border p-3 text-xs" style={{ background: 'rgba(255,45,85,0.05)', borderColor: 'rgba(255,45,85,0.2)', color: '#FF6B81' }}>
+                  小红书将自动生成AI配图（生成可能需要一些时间）
+                </p>
+              )}
+
               <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                 选择内容来源
               </label>

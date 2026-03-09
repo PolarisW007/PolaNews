@@ -239,6 +239,85 @@ export async function translateArticleBatch(
   return results;
 }
 
+export async function generateImagePrompt(title: string, content: string): Promise<string> {
+  if (MOCK_MODE) return 'A modern digital illustration of global news headlines with tech elements';
+
+  const systemPrompt = `你是一位专业的AI绘图提示词工程师。根据新闻内容生成一段英文绘图提示词(image prompt)，用于AI文生图。
+要求：
+- 输出纯英文，一段话，80-150词
+- 描述一个能代表新闻核心主题的视觉场景
+- 风格：现代插画/数字艺术风格，色彩鲜明
+- 不要出现文字、水印、人脸等敏感元素
+- 只返回提示词本身，不要有任何前缀`;
+
+  const prompt = `新闻标题：${title}\n内容摘要：${content.slice(0, 800)}\n\n请生成英文绘图提示词：`;
+  return callLLM(prompt, systemPrompt);
+}
+
+export async function generateImage(imagePrompt: string): Promise<string | null> {
+  if (MOCK_MODE || !API_KEY) return null;
+
+  try {
+    const res = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'qwen-image-2.0-pro',
+        input: {
+          messages: [{
+            role: 'user',
+            content: [{ text: imagePrompt }],
+          }],
+        },
+        parameters: {
+          size: '1024*1024',
+          watermark: false,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('[ImageGen] API error:', res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json() as {
+      output?: { choices?: Array<{ message?: { content?: Array<{ image?: string }> } }> };
+    };
+    const imageUrl = data.output?.choices?.[0]?.message?.content?.find(
+      (c: Record<string, unknown>) => c.image
+    )?.image;
+    return imageUrl || null;
+  } catch (e) {
+    console.error('[ImageGen] Error:', e);
+    return null;
+  }
+}
+
+export async function downloadAndSaveImage(imageUrl: string, filename: string): Promise<string | null> {
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    const fs = await import('fs');
+    const path = await import('path');
+    const dir = path.join(process.cwd(), 'public', 'share-images');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, filename);
+    fs.writeFileSync(filePath, buffer);
+
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    return `${basePath}/share-images/${filename}`;
+  } catch (e) {
+    console.error('[ImageSave] Error:', e);
+    return null;
+  }
+}
+
 function extractJson(text: string): Record<string, unknown> {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) {
