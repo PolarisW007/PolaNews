@@ -214,17 +214,21 @@ export default function ArticlePage() {
     return () => document.removeEventListener('keydown', handler);
   }, [prevArticle, nextArticle, router]);
 
-  // 触摸手势：左右滑动切换文章
+  // 触摸手势：仅在移动端生效，左右滑动切换文章
   const touchRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
   const [swipeHint, setSwipeHint] = useState<'left' | 'right' | null>(null);
   const swipeHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window) && window.matchMedia('(max-width: 1023px)').matches;
+    if (!isTouchDevice) return;
+
     const MIN_DISTANCE = 80;
     const MAX_VERTICAL = 60;
     const MAX_TIME = 400;
 
     const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
       const t = e.touches[0];
       touchRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now() };
     };

@@ -258,7 +258,7 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
       <aside
         className={clsx(
           'lg:hidden fixed left-0 top-0 z-50 h-screen flex-col transition-transform duration-300 ease-in-out',
-          open ? 'translate-x-0 flex' : '-translate-x-full flex',
+          open ? 'translate-x-0 flex pointer-events-auto' : '-translate-x-full flex pointer-events-none',
         )}
         style={{
           width: 280,
