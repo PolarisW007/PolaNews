@@ -42,6 +42,14 @@ const importanceColors: Record<string, { bg: string; text: string }> = {
   low: { bg: 'rgba(143,168,155,0.12)', text: 'var(--text-secondary)' },
 };
 
+interface NeighborInfo {
+  id: string;
+  title: string;
+  title_zh: string;
+  feed_title: string;
+  published_at: string;
+}
+
 /** 检测内容是否为 HN/Reddit 类纯元数据型正文 */
 function isMetadataOnlyContent(content: string): boolean {
   const clean = content.replace(/<[^>]*>/g, '').trim();
@@ -79,16 +87,8 @@ export default function ArticlePage() {
   const [fulltextContent, setFulltextContent] = useState<string>('');
   const [fulltextLoading, setFulltextLoading] = useState(false);
   const [articleUrl, setArticleUrl] = useState<string>('');
-
-  interface NeighborArticle {
-    id: string;
-    title: string;
-    title_zh: string;
-    feed_title: string;
-    published_at: string;
-  }
-  const [prevArticle, setPrevArticle] = useState<NeighborArticle | null>(null);
-  const [nextArticle, setNextArticle] = useState<NeighborArticle | null>(null);
+  const [prevArticle, setPrevArticle] = useState<NeighborInfo | null>(null);
+  const [nextArticle, setNextArticle] = useState<NeighborInfo | null>(null);
 
   const ttsPreloadRef = useRef(false);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
@@ -811,6 +811,12 @@ export default function ArticlePage() {
           )}
 
           <style jsx global>{`
+            .nav-float-btn:hover {
+              transform: scale(1.15);
+              color: var(--accent) !important;
+              border-color: var(--accent) !important;
+              box-shadow: 0 0 12px rgba(0, 230, 118, 0.3);
+            }
             .article-content img {
               max-width: 100%;
               height: auto;
@@ -962,42 +968,40 @@ export default function ArticlePage() {
 
         {/* 侧边悬浮上下篇按钮 */}
         {prevArticle && (
-          <button
-            onClick={() => router.push(`/article/${prevArticle.id}`)}
-            className="fixed z-30 hidden items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 xl:flex"
-            style={{
-              left: 280,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 40,
-              height: 40,
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-            }}
-            title={`上一篇: ${prevArticle.title_zh || prevArticle.title}`}
-          >
-            <ChevronLeft size={20} />
-          </button>
+          <div className="fixed z-30 hidden xl:block" style={{ left: 280, top: '50%', transform: 'translateY(-50%)' }}>
+            <button
+              onClick={() => router.push(`/article/${prevArticle.id}`)}
+              className="nav-float-btn flex items-center justify-center rounded-full shadow-lg transition-all"
+              style={{
+                width: 44,
+                height: 44,
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
+              }}
+              title={`上一篇: ${prevArticle.title_zh || prevArticle.title}`}
+            >
+              <ChevronLeft size={22} />
+            </button>
+          </div>
         )}
         {nextArticle && (
-          <button
-            onClick={() => router.push(`/article/${nextArticle.id}`)}
-            className="fixed z-30 hidden items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 xl:flex"
-            style={{
-              right: 20,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 40,
-              height: 40,
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-            }}
-            title={`下一篇: ${nextArticle.title_zh || nextArticle.title}`}
-          >
-            <ChevronRight size={20} />
-          </button>
+          <div className="fixed z-30 hidden xl:block" style={{ right: 24, top: '50%', transform: 'translateY(-50%)' }}>
+            <button
+              onClick={() => router.push(`/article/${nextArticle.id}`)}
+              className="nav-float-btn flex items-center justify-center rounded-full shadow-lg transition-all"
+              style={{
+                width: 44,
+                height: 44,
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
+              }}
+              title={`下一篇: ${nextArticle.title_zh || nextArticle.title}`}
+            >
+              <ChevronRight size={22} />
+            </button>
+          </div>
         )}
 
         {/* 右侧面板（中英对照模式下隐藏，把空间让给双栏内容） */}

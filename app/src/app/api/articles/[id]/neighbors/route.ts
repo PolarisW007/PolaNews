@@ -13,7 +13,7 @@ const neighborsCache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 120_000;
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -42,19 +42,21 @@ export async function GET(
     const prev = await queryOne(
       `SELECT a.id, a.title, a.title_zh, f.title as feed_title, a.published_at
        FROM articles a INNER JOIN feeds f ON a.feed_id = f.id
-       WHERE (a.published_at, a.created_at) > ($1, $2)
+       WHERE a.id != $3
+         AND (a.published_at > $1 OR (a.published_at = $1 AND a.created_at > $2))
        ORDER BY a.published_at ASC, a.created_at ASC
        LIMIT 1`,
-      [current.published_at, current.created_at]
+      [current.published_at, current.created_at, id]
     ) as NeighborRow | null;
 
     const next = await queryOne(
       `SELECT a.id, a.title, a.title_zh, f.title as feed_title, a.published_at
        FROM articles a INNER JOIN feeds f ON a.feed_id = f.id
-       WHERE (a.published_at, a.created_at) < ($1, $2)
+       WHERE a.id != $3
+         AND (a.published_at < $1 OR (a.published_at = $1 AND a.created_at < $2))
        ORDER BY a.published_at DESC, a.created_at DESC
        LIMIT 1`,
-      [current.published_at, current.created_at]
+      [current.published_at, current.created_at, id]
     ) as NeighborRow | null;
 
     const toItem = (row: NeighborRow | null) =>
