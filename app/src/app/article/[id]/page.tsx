@@ -495,14 +495,37 @@ export default function ArticlePage() {
       <div className={`mx-auto flex gap-8 ${isBilingualActive ? 'max-w-[1600px]' : 'max-w-[1200px]'}`}>
         {/* 主内容区 */}
         <article className="min-w-0 flex-1" style={{ maxWidth: isBilingualActive ? undefined : 800 }}>
-          <button
-            onClick={() => router.back()}
-            className="mb-6 flex items-center gap-2 text-sm transition-colors hover:opacity-80"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            <ArrowLeft size={16} />
-            返回
-          </button>
+          <div className="mb-6 flex items-center gap-2">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors hover:opacity-80"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              <ArrowLeft size={16} />
+              返回
+            </button>
+            <div className="mx-1 h-4 w-px" style={{ background: 'var(--border)' }} />
+            <button
+              onClick={() => prevArticle && router.push(`/article/${prevArticle.id}`)}
+              disabled={!prevArticle}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-all disabled:opacity-30"
+              style={{ color: prevArticle ? 'var(--text-secondary)' : 'var(--text-disabled)' }}
+              title={prevArticle ? `上一篇: ${prevArticle.title_zh || prevArticle.title}` : '没有上一篇了'}
+            >
+              <ChevronLeft size={16} />
+              上一篇
+            </button>
+            <button
+              onClick={() => nextArticle && router.push(`/article/${nextArticle.id}`)}
+              disabled={!nextArticle}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-all disabled:opacity-30"
+              style={{ color: nextArticle ? 'var(--text-secondary)' : 'var(--text-disabled)' }}
+              title={nextArticle ? `下一篇: ${nextArticle.title_zh || nextArticle.title}` : '没有下一篇了'}
+            >
+              下一篇
+              <ChevronRight size={16} />
+            </button>
+          </div>
 
           <h1
             className="mb-4 text-2xl font-semibold leading-tight md:text-3xl"
@@ -811,12 +834,6 @@ export default function ArticlePage() {
           )}
 
           <style jsx global>{`
-            .nav-float-btn:hover {
-              transform: scale(1.15);
-              color: var(--accent) !important;
-              border-color: var(--accent) !important;
-              box-shadow: 0 0 12px rgba(0, 230, 118, 0.3);
-            }
             .article-content img {
               max-width: 100%;
               height: auto;
@@ -965,44 +982,6 @@ export default function ArticlePage() {
             </div>
           )}
         </article>
-
-        {/* 侧边悬浮上下篇按钮 */}
-        {prevArticle && (
-          <div className="fixed z-30 hidden xl:block" style={{ left: 280, top: '50%', transform: 'translateY(-50%)' }}>
-            <button
-              onClick={() => router.push(`/article/${prevArticle.id}`)}
-              className="nav-float-btn flex items-center justify-center rounded-full shadow-lg transition-all"
-              style={{
-                width: 44,
-                height: 44,
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-secondary)',
-              }}
-              title={`上一篇: ${prevArticle.title_zh || prevArticle.title}`}
-            >
-              <ChevronLeft size={22} />
-            </button>
-          </div>
-        )}
-        {nextArticle && (
-          <div className="fixed z-30 hidden xl:block" style={{ right: 24, top: '50%', transform: 'translateY(-50%)' }}>
-            <button
-              onClick={() => router.push(`/article/${nextArticle.id}`)}
-              className="nav-float-btn flex items-center justify-center rounded-full shadow-lg transition-all"
-              style={{
-                width: 44,
-                height: 44,
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-secondary)',
-              }}
-              title={`下一篇: ${nextArticle.title_zh || nextArticle.title}`}
-            >
-              <ChevronRight size={22} />
-            </button>
-          </div>
-        )}
 
         {/* 右侧面板（中英对照模式下隐藏，把空间让给双栏内容） */}
         <aside className={`w-80 shrink-0 lg:block ${isBilingualActive ? 'hidden' : 'hidden lg:block'}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
