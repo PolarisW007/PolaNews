@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Share2,
   Plus,
@@ -16,6 +16,7 @@ import {
   Link2,
   ExternalLink,
   Twitter,
+  Sparkles,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
@@ -70,6 +71,23 @@ const PlatformIcon = ({ platform, size = 18, color }: { platform: string; size?:
   }
 };
 
+function ImageGeneratingPlaceholder({ className = '', style = {} }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-2 rounded-lg ${className}`}
+      style={{ background: 'linear-gradient(135deg, rgba(0,255,136,0.05), rgba(0,200,100,0.1))', border: '1px dashed rgba(0,255,136,0.3)', ...style }}
+    >
+      <div className="relative">
+        <Sparkles size={24} style={{ color: 'var(--accent)', opacity: 0.7 }} />
+        <Loader2 size={14} className="animate-spin absolute -right-1 -top-1" style={{ color: 'var(--accent)' }} />
+      </div>
+      <span className="text-xs font-medium" style={{ color: 'var(--accent)', opacity: 0.8 }}>
+        AI 配图生成中...
+      </span>
+    </div>
+  );
+}
+
 export default function ShareHistoryPage() {
   const [shares, setShares] = useState<SocialShare[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +102,9 @@ export default function ShareHistoryPage() {
   const [digests, setDigests] = useState<Digest[]>([]);
   const [selectedDigestId, setSelectedDigestId] = useState('');
   const { toast } = useToast();
+
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const detailPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchShares = useCallback(async () => {
     setLoading(true);
@@ -112,6 +133,76 @@ export default function ShareHistoryPage() {
     fetchShares();
   }, [fetchShares]);
 
+  // Poll for generating shares in the list
+  useEffect(() => {
+    const hasGenerating = shares.some(s => s.image_status === 'generating');
+    if (hasGenerating) {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const data = await api.shares.list(1, 50, activeTab) as { shares: SocialShare[] };
+          const newShares = data.shares || [];
+          setShares(newShares);
+
+          if (detailShare) {
+            const updated = newShares.find(s => s.id === detailShare.id);
+            if (updated && updated.image_status !== detailShare.image_status) {
+              setDetailShare(updated);
+            }
+          }
+
+          if (!newShares.some(s => s.image_status === 'generating')) {
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+        } catch { /* ignore polling errors */ }
+      }, 4000);
+    }
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [shares, activeTab, detailShare]);
+
+  // Poll for the detail modal's share image status
+  useEffect(() => {
+    if (!detailShare || detailShare.image_status !== 'generating') {
+      if (detailPollRef.current) {
+        clearInterval(detailPollRef.current);
+        detailPollRef.current = null;
+      }
+      return;
+    }
+
+    detailPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${basePath}/api/share/${detailShare.id}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          const updated = json.data as SocialShare;
+          setDetailShare(updated);
+          setShares(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s));
+          if (updated.image_status !== 'generating') {
+            if (detailPollRef.current) clearInterval(detailPollRef.current);
+            detailPollRef.current = null;
+            if (updated.image_status === 'ready') {
+              toast('AI 配图已生成完毕', 'success');
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+
+    return () => {
+      if (detailPollRef.current) {
+        clearInterval(detailPollRef.current);
+        detailPollRef.current = null;
+      }
+    };
+  }, [detailShare?.id, detailShare?.image_status, toast]);
+
   const handleOpenModal = () => {
     setShowModal(true);
     fetchDigests();
@@ -124,7 +215,7 @@ export default function ShareHistoryPage() {
       await api.shares.generate(modalPlatform, selectedDigestId, undefined, 'zh');
       setShowModal(false);
       await fetchShares();
-      toast('分享文案生成成功', 'success');
+      toast('分享文案生成成功' + (modalPlatform === 'xiaohongshu' ? '，配图正在后台生成' : ''), 'success');
     } catch (e) {
       toast(e instanceof Error ? e.message : '生成分享失败', 'error');
     } finally {
@@ -179,6 +270,9 @@ export default function ShareHistoryPage() {
       return [];
     } catch { return []; }
   };
+
+  const isImageReady = (share: SocialShare) => share.image_status === 'ready' && (share.cover_url || parseImages(share.images).length > 0);
+  const isImageGenerating = (share: SocialShare) => share.image_status === 'generating';
 
   const tabs: { key: Platform; label: string }[] = [
     { key: '', label: '全部' },
@@ -275,9 +369,9 @@ export default function ShareHistoryPage() {
                       >
                         {platformLabels[share.platform] || share.platform}
                       </span>
-                      {share.image_status === 'generating' && (
-                        <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
-                          <Loader2 size={10} className="animate-spin" /> 图片生成中
+                      {isImageGenerating(share) && (
+                        <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs" style={{ background: 'rgba(0,255,136,0.08)', color: 'var(--accent)' }}>
+                          <Loader2 size={10} className="animate-spin" /> 配图生成中
                         </span>
                       )}
                     </div>
@@ -288,7 +382,11 @@ export default function ShareHistoryPage() {
                       {share.content?.slice(0, 120)}
                     </p>
 
-                    {(share.cover_url || imgs.length > 0) && (
+                    {isImageGenerating(share) && (
+                      <ImageGeneratingPlaceholder className="mt-2 h-16 w-28" />
+                    )}
+
+                    {isImageReady(share) && (
                       <div className="mt-2 flex gap-1.5 overflow-hidden">
                         {share.cover_url && (
                           <img src={share.cover_url} alt="封面" className="h-16 w-24 rounded-lg object-cover" style={{ border: '1px solid var(--border)' }} />
@@ -348,7 +446,12 @@ export default function ShareHistoryPage() {
                 {detailShare.title || '无标题'}
               </h2>
 
-              {detailShare.cover_url && (
+              {/* Cover image area */}
+              {isImageGenerating(detailShare) && (
+                <ImageGeneratingPlaceholder className="mb-4 h-48 w-full" />
+              )}
+
+              {isImageReady(detailShare) && detailShare.cover_url && (
                 <div className="mb-4 overflow-hidden rounded-lg">
                   <img src={detailShare.cover_url} alt="封面" className="w-full rounded-lg object-cover" style={{ maxHeight: 280 }} />
                 </div>
@@ -361,7 +464,8 @@ export default function ShareHistoryPage() {
                 {detailShare.content}
               </div>
 
-              {(() => {
+              {/* AI images */}
+              {isImageReady(detailShare) && (() => {
                 const imgs = parseImages(detailShare.images);
                 if (imgs.length === 0) return null;
                 return (
@@ -379,6 +483,15 @@ export default function ShareHistoryPage() {
                 );
               })()}
 
+              {isImageGenerating(detailShare) && (
+                <div className="mb-5 flex items-center gap-2 rounded-lg border p-3" style={{ background: 'rgba(0,255,136,0.03)', borderColor: 'rgba(0,255,136,0.15)' }}>
+                  <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                  <span className="text-xs" style={{ color: 'var(--accent)' }}>
+                    AI 正在为您生成配图，完成后将自动显示...
+                  </span>
+                </div>
+              )}
+
               {/* Public link */}
               <div className="mb-4 flex items-center gap-2 rounded-lg border p-3" style={{ background: 'rgba(0,255,136,0.03)', borderColor: 'var(--border)' }}>
                 <Link2 size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -394,7 +507,6 @@ export default function ShareHistoryPage() {
                 </button>
               </div>
 
-              {/* Open public page */}
               <a
                 href={getPublicUrl(detailShare.id)}
                 target="_blank"
@@ -485,7 +597,7 @@ export default function ShareHistoryPage() {
 
               {modalPlatform === 'xiaohongshu' && (
                 <p className="mb-4 rounded-lg border p-3 text-xs" style={{ background: 'rgba(255,45,85,0.05)', borderColor: 'rgba(255,45,85,0.2)', color: '#FF6B81' }}>
-                  小红书将自动生成AI配图（生成可能需要一些时间）
+                  小红书将自动生成AI配图（后台异步生成，不影响其他操作）
                 </p>
               )}
 

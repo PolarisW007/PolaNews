@@ -11,6 +11,7 @@ interface ShareData {
   content: string;
   cover_url: string;
   images: string;
+  image_status: string;
   language: string;
   created_at: string;
   article_title?: string;
@@ -41,6 +42,21 @@ export default function PublicSharePage() {
       }
     })();
   }, [id]);
+
+  useEffect(() => {
+    if (!share || share.image_status !== 'generating') return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`${basePath}/api/share/${id}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          setShare(data.data);
+          if (data.data.image_status !== 'generating') clearInterval(timer);
+        }
+      } catch { /* ignore */ }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [id, share?.image_status]);
 
   const handleCopy = async () => {
     if (!share) return;
@@ -83,7 +99,8 @@ export default function PublicSharePage() {
     if (share.images) images = JSON.parse(share.images);
   } catch { /* ignore */ }
 
-  const coverImage = share.cover_url || share.article_cover || (images.length > 0 ? images[0].url : '');
+  const isGenerating = share.image_status === 'generating';
+  const coverImage = !isGenerating ? (share.cover_url || share.article_cover || (images.length > 0 ? images[0].url : '')) : '';
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a0f0d 0%, #0d1a14 50%, #0a0f0d 100%)', fontFamily: "'Inter', 'Noto Sans SC', system-ui, sans-serif" }}>
@@ -97,10 +114,23 @@ export default function PublicSharePage() {
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
         }}>
 
+          {isGenerating && (
+            <div style={{
+              width: '100%', height: 200,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+              background: 'linear-gradient(135deg, rgba(0,255,136,0.03), rgba(0,200,100,0.08))',
+              borderBottom: '1px dashed rgba(0,255,136,0.2)',
+            }}>
+              <Loader2 size={28} style={{ color: '#00ff88', animation: 'spin 1s linear infinite' }} />
+              <span style={{ color: '#00ff88', fontSize: 14, opacity: 0.8 }}>AI 配图生成中...</span>
+              <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+            </div>
+          )}
+
           {coverImage && (
             <div style={{ width: '100%', maxHeight: 400, overflow: 'hidden' }}>
               <img
-                src={coverImage.startsWith('/') ? coverImage : coverImage}
+                src={coverImage}
                 alt="cover"
                 style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover' }}
               />
