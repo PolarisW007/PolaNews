@@ -336,30 +336,14 @@ export async function downloadAndSaveImage(imageUrl: string, filename: string): 
 
     const fs = await import('fs');
     const path = await import('path');
-    const cwd = process.cwd();
 
-    const dirs = [
-      path.join(cwd, 'public', 'share-images'),
-      path.join(cwd, '.next', 'standalone', 'public', 'share-images'),
-    ];
+    const persistentDir = process.env.SHARE_IMAGES_DIR
+      || path.resolve(process.cwd(), '..', 'share-images');
 
-    let savedPath = '';
-    for (const dir of dirs) {
-      try {
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        const filePath = path.join(dir, filename);
-        fs.writeFileSync(filePath, buffer);
-        savedPath = filePath;
-        console.log('[ImageSave] Saved to:', filePath);
-      } catch (err) {
-        console.error('[ImageSave] Failed to save to:', dir, err);
-      }
-    }
-
-    if (!savedPath) {
-      console.error('[ImageSave] Could not save to any location');
-      return null;
-    }
+    if (!fs.existsSync(persistentDir)) fs.mkdirSync(persistentDir, { recursive: true });
+    const filePath = path.join(persistentDir, filename);
+    fs.writeFileSync(filePath, buffer);
+    console.log('[ImageSave] Saved to:', filePath);
 
     const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
     return `${bp}/share-images/${filename}`;
