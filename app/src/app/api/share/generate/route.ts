@@ -41,16 +41,21 @@ async function generateShareImages(
   title: string,
   content: string
 ): Promise<void> {
+  console.log('[ShareGen] Starting image generation for share:', shareId);
   try {
     await execute(
       "UPDATE social_shares SET image_status = 'generating' WHERE id = $1",
       [shareId]
     );
 
+    console.log('[ShareGen] Step 1: Generating image prompt...');
     const imagePrompt = await generateImagePrompt(title, content);
+    console.log('[ShareGen] Step 2: Prompt generated, calling image API...');
+
     const imageUrl = await generateImage(imagePrompt);
 
     if (imageUrl) {
+      console.log('[ShareGen] Step 3: Image generated, downloading...');
       const filename = `share_${shareId}.png`;
       const localUrl = await downloadAndSaveImage(imageUrl, filename);
       const finalUrl = localUrl || imageUrl;
@@ -59,7 +64,9 @@ async function generateShareImages(
         `UPDATE social_shares SET cover_url = $1, images = $2, image_status = 'ready' WHERE id = $3`,
         [finalUrl, JSON.stringify([{ url: finalUrl, prompt: imagePrompt, width: 1024, height: 1024 }]), shareId]
       );
+      console.log('[ShareGen] Image saved successfully:', finalUrl);
     } else {
+      console.warn('[ShareGen] No image URL returned, marking as skipped');
       await execute(
         "UPDATE social_shares SET image_status = 'skipped' WHERE id = $1",
         [shareId]

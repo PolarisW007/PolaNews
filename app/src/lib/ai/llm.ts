@@ -255,14 +255,23 @@ export async function generateImagePrompt(title: string, content: string): Promi
 }
 
 export async function generateImage(imagePrompt: string): Promise<string | null> {
-  if (MOCK_MODE || !API_KEY) return null;
+  if (MOCK_MODE || !API_KEY) {
+    console.log('[ImageGen] Skipped: MOCK_MODE or no API_KEY');
+    return null;
+  }
+
+  const dashscopeKey = process.env.DASHSCOPE_API_KEY || API_KEY;
+  console.log('[ImageGen] Starting image generation, prompt length:', imagePrompt.length);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
   try {
     const res = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
+        'Authorization': `Bearer ${dashscopeKey}`,
       },
       body: JSON.stringify({
         model: 'qwen-image-2.0-pro',
@@ -277,21 +286,33 @@ export async function generateImage(imagePrompt: string): Promise<string | null>
           watermark: false,
         },
       }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
-      console.error('[ImageGen] API error:', res.status, await res.text());
+      const errText = await res.text();
+      console.error('[ImageGen] API error:', res.status, errText);
       return null;
     }
 
-    const data = await res.json() as {
-      output?: { choices?: Array<{ message?: { content?: Array<{ image?: string }> } }> };
-    };
-    const imageUrl = data.output?.choices?.[0]?.message?.content?.find(
+    const data = await res.json() as Record<string, unknown>;
+    console.log('[ImageGen] API response keys:', Object.keys(data));
+
+    const output = data.output as { choices?: Array<{ message?: { content?: Array<{ image?: string }> } }> } | undefined;
+    const imageUrl = output?.choices?.[0]?.message?.content?.find(
       (c: Record<string, unknown>) => c.image
     )?.image;
+
+    if (imageUrl) {
+      console.log('[ImageGen] Got image URL:', imageUrl.slice(0, 80) + '...');
+    } else {
+      console.error('[ImageGen] No image URL in response:', JSON.stringify(data).slice(0, 500));
+    }
     return imageUrl || null;
   } catch (e) {
+    clearTimeout(timeoutId);
     console.error('[ImageGen] Error:', e);
     return null;
   }
@@ -299,19 +320,49 @@ export async function generateImage(imagePrompt: string): Promise<string | null>
 
 export async function downloadAndSaveImage(imageUrl: string, filename: string): Promise<string | null> {
   try {
-    const res = await fetch(imageUrl);
-    if (!res.ok) return null;
+    console.log('[ImageSave] Downloading:', imageUrl.slice(0, 80));
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    const res = await fetch(imageUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      console.error('[ImageSave] Download failed:', res.status);
+      return null;
+    }
     const buffer = Buffer.from(await res.arrayBuffer());
+    console.log('[ImageSave] Downloaded', buffer.length, 'bytes');
 
     const fs = await import('fs');
     const path = await import('path');
-    const dir = path.join(process.cwd(), 'public', 'share-images');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, filename);
-    fs.writeFileSync(filePath, buffer);
+    const cwd = process.cwd();
 
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    return `${basePath}/share-images/${filename}`;
+    const dirs = [
+      path.join(cwd, 'public', 'share-images'),
+      path.join(cwd, '.next', 'standalone', 'public', 'share-images'),
+    ];
+
+    let savedPath = '';
+    for (const dir of dirs) {
+      try {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const filePath = path.join(dir, filename);
+        fs.writeFileSync(filePath, buffer);
+        savedPath = filePath;
+        console.log('[ImageSave] Saved to:', filePath);
+      } catch (err) {
+        console.error('[ImageSave] Failed to save to:', dir, err);
+      }
+    }
+
+    if (!savedPath) {
+      console.error('[ImageSave] Could not save to any location');
+      return null;
+    }
+
+    const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    return `${bp}/share-images/${filename}`;
   } catch (e) {
     console.error('[ImageSave] Error:', e);
     return null;
