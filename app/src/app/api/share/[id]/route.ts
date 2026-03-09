@@ -9,7 +9,7 @@ export async function GET(
     const { id } = await params;
 
     const share = await queryOne(
-      `SELECT s.*, a.title as article_title, a.source_url as article_url, a.cover_image as article_cover
+      `SELECT s.*, a.title as article_title, a.url as article_url, a.cover_image as article_cover
        FROM social_shares s
        LEFT JOIN articles a ON s.article_id = a.id
        WHERE s.id = $1`,
