@@ -293,7 +293,7 @@ export default function SettingsPage() {
                     onClick={() => toggleDigestTime(time)}
                     className="flex shrink-0 items-center gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm transition-all"
                     style={{
-                      backgroundColor: active ? 'rgba(0,230,118,0.1)' : 'var(--bg-primary)',
+                      backgroundColor: active ? 'rgba(0,255,157,0.1)' : 'var(--bg-primary)',
                       color: active ? 'var(--accent)' : 'var(--text-secondary)',
                       border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
                     }}
@@ -323,7 +323,7 @@ export default function SettingsPage() {
                     onClick={() => toggleCategory(cat.value)}
                     className="flex shrink-0 items-center gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm transition-all"
                     style={{
-                      backgroundColor: active ? 'rgba(0,230,118,0.1)' : 'var(--bg-primary)',
+                      backgroundColor: active ? 'rgba(0,255,157,0.1)' : 'var(--bg-primary)',
                       color: active ? 'var(--accent)' : 'var(--text-secondary)',
                       border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
                     }}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db/schema';
-import { callLLM } from '@/lib/ai/llm';
+import { callLLM, extractJsonArray } from '@/lib/ai/llm';
 
 interface TranslationParagraph {
   original: string;
@@ -155,12 +155,17 @@ export async function POST(
     const systemPrompt = '你是专业新闻翻译，翻译准确流畅，专业术语保留或使用通用译名。只返回合法JSON数组，不要markdown围栏。';
     const result = await callLLM(prompt, systemPrompt);
 
-    let paragraphs: TranslationParagraph[];
+    let paragraphs: TranslationParagraph[] = [];
     try {
-      const match = result.match(/\[[\s\S]*\]/);
-      paragraphs = match ? JSON.parse(match[0]) : [];
+      const arr = extractJsonArray(result) as Array<{ original?: string; translated?: string }>;
+      paragraphs = arr
+        .map((it, i) => ({
+          original: (it?.original || rawParagraphs[i] || '').toString(),
+          translated: (it?.translated || '').toString().trim(),
+        }))
+        .filter((p) => p.original || p.translated);
     } catch {
-      paragraphs = rawParagraphs.map((p) => ({ original: p, translated: p }));
+      paragraphs = [];
     }
 
     if (paragraphs.length === 0) {
@@ -228,14 +233,24 @@ async function translateHtml(articleId: string, html: string, force?: boolean) {
     const prompt = `将以下英文文本逐条翻译为中文。返回JSON数组，每个元素是一个字符串（翻译结果），按照输入顺序。只返回JSON数组，不要任何其他内容。\n\n${inputText}`;
     const systemPrompt = '你是专业新闻翻译。翻译准确、自然。只返回合法JSON字符串数组（如["译文1","译文2"]），不要markdown围栏。';
 
-    const result = await callLLM(prompt, systemPrompt);
     try {
-      const match = result.match(/\[[\s\S]*\]/);
-      const translations: string[] = match ? JSON.parse(match[0]) : [];
-      batch.forEach((seg, i) => {
-        translationMap.set(seg.index, translations[i] || seg.text);
+      const result = await callLLM(prompt, systemPrompt);
+      const arr = extractJsonArray(result);
+      const translations: string[] = arr.map((it) => {
+        if (typeof it === 'string') return it;
+        if (it && typeof it === 'object') {
+          const o = it as Record<string, unknown>;
+          const v = o.translated ?? o.translation ?? o.text ?? o.zh ?? o.chinese;
+          if (typeof v === 'string') return v;
+        }
+        return '';
       });
-    } catch {
+      batch.forEach((seg, i) => {
+        const tr = (translations[i] || '').trim();
+        translationMap.set(seg.index, tr || seg.text);
+      });
+    } catch (e) {
+      console.error('[translateHtml] batch error:', e);
       batch.forEach((seg) => translationMap.set(seg.index, seg.text));
     }
   }

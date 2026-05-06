@@ -30,7 +30,7 @@ function highlightText(text: string, keyword: string) {
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
   return parts.map((part, i) =>
     part.toLowerCase() === keyword.toLowerCase()
-      ? `<mark style="background:rgba(0,230,118,0.25);color:var(--accent);border-radius:2px;padding:0 2px">${part}</mark>`
+      ? `<mark style="background:rgba(0,255,157,0.25);color:var(--accent);border-radius:2px;padding:0 2px">${part}</mark>`
       : part
   ).join('');
 }

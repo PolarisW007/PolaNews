@@ -220,7 +220,7 @@ export default function TrendingPage() {
                         className="inline-block px-3 py-1 rounded-full cursor-default"
                         style={{
                           fontSize: size,
-                          backgroundColor: 'rgba(0,230,118,0.12)',
+                          backgroundColor: 'rgba(0,255,157,0.12)',
                           color: 'var(--accent)',
                           border: '1px solid var(--border)',
                         }}
@@ -320,7 +320,7 @@ export default function TrendingPage() {
                             backgroundColor:
                               art.importance === 'breaking'
                                 ? 'rgba(255,82,82,0.2)'
-                                : 'rgba(0,230,118,0.12)',
+                                : 'rgba(0,255,157,0.12)',
                             color:
                               art.importance === 'breaking'
                                 ? '#ff5252'

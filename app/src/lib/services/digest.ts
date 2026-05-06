@@ -6,10 +6,25 @@ interface ArticleRow {
   id: string;
   feed_id: string;
   title: string;
+  title_zh: string;
   summary: string;
+  summary_zh: string;
   ai_summary: string;
   importance: string;
   categories: Record<string, string> | string;
+}
+
+/** 选中文优先，回退英文；lang 只在需要时把中文换成英文 */
+function pickTitle(r: ArticleRow, lang: string): string {
+  if (lang === 'zh') return r.title_zh || r.title || '';
+  return r.title || r.title_zh || '';
+}
+
+function pickSummary(r: ArticleRow, lang: string): string {
+  if (lang === 'zh') {
+    return r.ai_summary || r.summary_zh || r.summary || r.title_zh || r.title || '';
+  }
+  return r.ai_summary || r.summary || r.summary_zh || r.title || '';
 }
 
 function parseCategory(categories: Record<string, string> | string): string {
@@ -42,7 +57,7 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
   const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
 
   let rows = await query<ArticleRow>(
-    `SELECT id, feed_id, title, summary, ai_summary, importance, categories
+    `SELECT id, feed_id, title, title_zh, summary, summary_zh, ai_summary, importance, categories
      FROM articles
      WHERE created_at >= $1
      ORDER BY
@@ -59,7 +74,7 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
 
   if (rows.length < 5) {
     rows = await query<ArticleRow>(
-      `SELECT id, feed_id, title, summary, ai_summary, importance, categories
+      `SELECT id, feed_id, title, title_zh, summary, summary_zh, ai_summary, importance, categories
        FROM articles
        ORDER BY
          CASE importance
@@ -78,8 +93,8 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
   const sourceCount = new Set(top20.map((r) => r.feed_id)).size;
 
   const articlesForLLM = top20.map((r) => ({
-    title: r.title,
-    summary: r.ai_summary || r.summary || r.title,
+    title: pickTitle(r, lang),
+    summary: pickSummary(r, lang),
     category: parseCategory(r.categories),
     importance: r.importance || 'normal',
   }));
@@ -92,14 +107,14 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push({
       id: r.id,
-      title: r.title,
-      summary: r.ai_summary || r.summary || r.title,
+      title: pickTitle(r, lang),
+      summary: pickSummary(r, lang),
     });
   }
 
   const headlines = top20.slice(0, 3).map((r) => ({
-    title: r.title,
-    summary: r.ai_summary || r.summary || r.title,
+    title: pickTitle(r, lang),
+    summary: pickSummary(r, lang),
     article_id: r.id,
     importance: r.importance || 'normal',
     category: parseCategory(r.categories),

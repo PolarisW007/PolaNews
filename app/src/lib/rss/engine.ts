@@ -2,6 +2,7 @@ import Parser from 'rss-parser';
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute, withTransaction } from '../db/schema';
 import { translateArticleBatch, classifyArticle } from '../ai/llm';
+import { synthesizePendingAudio } from '../services/tts';
 
 const parser = new Parser();
 
@@ -183,4 +184,66 @@ export async function classifyUnclassifiedArticles(limit = 30): Promise<number> 
   }
 
   return classified;
+}
+
+export interface IngestResult {
+  fetched: boolean;
+  translated: number;
+  classified: number;
+  audio_synthesized: number;
+  error?: string;
+}
+
+/**
+ * 全量增量处理管道：抓取 RSS → 翻译新文章 → 分类 → 合成中文语音。
+ * 用于 scheduler（每 2 小时）与 /api/feeds/fetch 手动触发，保持行为一致。
+ * 任一子步骤失败仅记录日志，不中断后续步骤。
+ */
+export async function runFullIngest(options?: {
+  translateLimit?: number;
+  classifyLimit?: number;
+  audioLimit?: number;
+  skipFetch?: boolean;
+}): Promise<IngestResult> {
+  const translateLimit = options?.translateLimit ?? 100;
+  const classifyLimit = options?.classifyLimit ?? 60;
+  const audioLimit = options?.audioLimit ?? 30;
+
+  const result: IngestResult = {
+    fetched: false,
+    translated: 0,
+    classified: 0,
+    audio_synthesized: 0,
+  };
+
+  if (!options?.skipFetch) {
+    try {
+      await fetchAllFeeds();
+      result.fetched = true;
+    } catch (e) {
+      console.error('[Pipeline] fetchAllFeeds failed:', e);
+      result.error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  try {
+    result.translated = await translateUntranslatedArticles(translateLimit);
+  } catch (e) {
+    console.error('[Pipeline] translateUntranslatedArticles failed:', e);
+  }
+
+  try {
+    result.classified = await classifyUnclassifiedArticles(classifyLimit);
+  } catch (e) {
+    console.error('[Pipeline] classifyUnclassifiedArticles failed:', e);
+  }
+
+  try {
+    result.audio_synthesized = await synthesizePendingAudio(audioLimit);
+  } catch (e) {
+    console.error('[Pipeline] synthesizePendingAudio failed:', e);
+  }
+
+  console.log('[Pipeline] runFullIngest done:', result);
+  return result;
 }

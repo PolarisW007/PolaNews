@@ -63,6 +63,9 @@ export interface Article {
   is_read?: boolean;
   is_starred?: boolean;
   is_saved?: boolean;
+  audio_url?: string;
+  audio_url_en?: string;
+  audio_url_ja?: string;
 }
 
 export interface ArticleCategories {

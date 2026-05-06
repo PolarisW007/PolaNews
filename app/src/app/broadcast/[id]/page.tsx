@@ -230,7 +230,7 @@ export default function BroadcastDetailPage() {
                   id={`segment-${idx}`}
                   className="rounded-xl border p-5 transition-all duration-300"
                   style={{
-                    background: isActive ? 'rgba(0,230,118,0.06)' : 'var(--bg-secondary)',
+                    background: isActive ? 'rgba(0,255,157,0.06)' : 'var(--bg-secondary)',
                     borderColor: isActive ? 'var(--accent)' : 'var(--border)',
                     borderLeftWidth: isActive ? 4 : 1,
                     borderLeftColor: isActive ? 'var(--accent)' : 'var(--border)',

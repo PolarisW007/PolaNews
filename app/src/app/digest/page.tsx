@@ -111,7 +111,7 @@ export default function DigestListPage() {
               >
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
-                  style={{ background: 'rgba(0,230,118,0.1)' }}
+                  style={{ background: 'rgba(0,255,157,0.1)' }}
                 >
                   <Calendar size={22} style={{ color: 'var(--accent)' }} />
                 </div>
@@ -140,7 +140,7 @@ export default function DigestListPage() {
                 <span
                   className="shrink-0 rounded-full px-3 py-1 text-xs"
                   style={{
-                    background: 'rgba(0,230,118,0.08)',
+                    background: 'rgba(0,255,157,0.08)',
                     color: 'var(--accent-secondary)',
                     border: '1px solid var(--border)',
                   }}

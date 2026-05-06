@@ -38,7 +38,7 @@ const LANGS = [
 const importanceColors: Record<string, { bg: string; text: string }> = {
   breaking: { bg: 'rgba(255,82,82,0.15)', text: '#FF5252' },
   important: { bg: 'rgba(255,171,64,0.15)', text: '#FFAB40' },
-  normal: { bg: 'rgba(0,230,118,0.12)', text: 'var(--accent)' },
+  normal: { bg: 'rgba(0,255,157,0.12)', text: 'var(--accent)' },
   low: { bg: 'rgba(143,168,155,0.12)', text: 'var(--text-secondary)' },
 };
 
@@ -48,6 +48,38 @@ interface NeighborInfo {
   title_zh: string;
   feed_title: string;
   published_at: string;
+}
+
+// 模块级内存缓存：跨页面复用上下篇文章数据，切换时秒开
+const articlePrefetchCache = new Map<string, { data: Article; ts: number }>();
+const PREFETCH_TTL = 5 * 60 * 1000;
+
+function getCachedArticle(id: string): Article | null {
+  const hit = articlePrefetchCache.get(id);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > PREFETCH_TTL) {
+    articlePrefetchCache.delete(id);
+    return null;
+  }
+  return hit.data;
+}
+
+function setCachedArticle(id: string, data: Article) {
+  articlePrefetchCache.set(id, { data, ts: Date.now() });
+  if (articlePrefetchCache.size > 50) {
+    const oldest = [...articlePrefetchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+    if (oldest) articlePrefetchCache.delete(oldest[0]);
+  }
+}
+
+async function prefetchArticle(id: string) {
+  if (!id || getCachedArticle(id)) return;
+  try {
+    const data = await api.articles.get(id) as Article;
+    if (data?.id) setCachedArticle(id, data);
+  } catch {
+    // 静默失败
+  }
 }
 
 /** 检测内容是否为 HN/Reddit 类纯元数据型正文 */
@@ -96,7 +128,6 @@ export default function ArticlePage() {
   // 加载文章 + 自动加载全文
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
     // 重置全文状态（切换文章时）
     setFulltextContent('');
     setFulltextLoading(false);
@@ -108,12 +139,32 @@ export default function ArticlePage() {
     setPrevArticle(null);
     setNextArticle(null);
 
+    // 快路径：若已 prefetch 过该文章，先秒显，避免白屏
+    const cached = getCachedArticle(id);
+    if (cached) {
+      setArticle(cached);
+      setStarred(!!cached.is_starred);
+      setSaved(!!cached.is_saved);
+      setArticleUrl(cached.url || '');
+      setLoading(false);
+      // 若已有持久化音频，直接挂到 preloadedAudioUrl
+      if (cached.audio_url) {
+        setPreloadedAudioUrl(cached.audio_url);
+        ttsPreloadRef.current = true;
+      }
+    } else {
+      setLoading(true);
+    }
+
     fetch(`${basePath}/api/articles/${id}/neighbors`)
       .then(r => r.json())
       .then(d => {
         if (d.success && d.data) {
           setPrevArticle(d.data.prev || null);
           setNextArticle(d.data.next || null);
+          // 后台 prefetch 上下篇完整 Article，下次切换秒开
+          if (d.data.prev?.id) prefetchArticle(d.data.prev.id);
+          if (d.data.next?.id) prefetchArticle(d.data.next.id);
         }
       })
       .catch(() => {});
@@ -121,10 +172,17 @@ export default function ArticlePage() {
     api.articles.get(id).then((data) => {
       const art = data as Article;
       setArticle(art);
+      setCachedArticle(id, art);
       setStarred(!!art.is_starred);
       setSaved(!!art.is_saved);
       setArticleUrl(art.url || '');
       api.articles.markRead(id).catch(() => {});
+
+      // 若后端已持久化 audio_url，直接作为 preloadedAudioUrl 使用，跳过合成
+      if (art.audio_url && !preloadedAudioUrl) {
+        setPreloadedAudioUrl(art.audio_url);
+        ttsPreloadRef.current = true;
+      }
 
       // 检查 localStorage 中是否有缓存的摘要（加速二次访问）
       const cacheKey = `ai_summary_zh_${id}`;
@@ -176,9 +234,14 @@ export default function ArticlePage() {
               .then(tr => {
                 if (tr.success && tr.data?.translated_html) {
                   setTranslatedHtml(tr.data.translated_html);
+                  // 预翻译完成后默认开启中英对照（与首页中文优先风格一致）
+                  setBilingualMode(true);
                 }
                 if (tr.success && tr.data?.paragraphs?.length > 0) {
                   setTranslatedParagraphs(tr.data.paragraphs);
+                  if (!tr.data?.translated_html) {
+                    setBilingualMode(true);
+                  }
                 }
               })
               .catch(() => {});
@@ -290,23 +353,60 @@ export default function ArticlePage() {
       const res = await fetch(`${basePath}/api/tts/synthesize`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ text: text.slice(0, 800), voice: 'longwan_v3' }),
+        body: JSON.stringify({
+          text: text.slice(0, 800),
+          voice: 'longwan_v3',
+          articleId: article?.id,
+          lang: summaryLang,
+        }),
       });
       const data = await res.json();
       if (data.success && data.data?.url) {
         setPreloadedAudioUrl(data.data.url);
+        // 同步回写 article，下次从 prefetch cache 命中时可秒取
+        setArticle((prev) => {
+          if (!prev) return prev;
+          const patch: Partial<Article> = {};
+          if (summaryLang === 'en') patch.audio_url_en = data.data.url;
+          else if (summaryLang === 'ja') patch.audio_url_ja = data.data.url;
+          else patch.audio_url = data.data.url;
+          const next = { ...prev, ...patch };
+          setCachedArticle(prev.id, next);
+          return next;
+        });
       }
     } catch {
       // 预加载失败不报错
     } finally {
       setTtsPreloading(false);
     }
-  }, [basePath, preloadedAudioUrl]);
+  }, [basePath, preloadedAudioUrl, article?.id, summaryLang]);
 
   useEffect(() => {
-    if (!article?.ai_summary || ttsPreloadRef.current) return;
-    preloadTTS(article.ai_summary);
-  }, [article?.ai_summary, preloadTTS]);
+    if (!article) return;
+    const text =
+      summaryLang === 'en' ? article.ai_summary_en :
+      summaryLang === 'ja' ? article.ai_summary_ja :
+      article.ai_summary;
+    if (!text) return;
+    const persistedUrl =
+      summaryLang === 'en' ? article.audio_url_en :
+      summaryLang === 'ja' ? article.audio_url_ja :
+      article.audio_url;
+    // 命中持久化：直接挂上，跳过合成
+    if (persistedUrl) {
+      if (preloadedAudioUrl !== persistedUrl) setPreloadedAudioUrl(persistedUrl);
+      ttsPreloadRef.current = true;
+      return;
+    }
+    if (ttsPreloadRef.current) return;
+    preloadTTS(text);
+  }, [
+    article,
+    summaryLang,
+    preloadTTS,
+    preloadedAudioUrl,
+  ]);
 
   const handleTTS = async () => {
     if (isSpeaking) {
@@ -433,7 +533,11 @@ export default function ArticlePage() {
   };
 
   const handleLangSwitch = (lang: 'zh' | 'en' | 'ja') => {
+    if (lang === summaryLang) return;
     setSummaryLang(lang);
+    // 切换语言时重置 TTS 预载状态，由 useEffect 按新语言决定复用持久化或重新合成
+    setPreloadedAudioUrl(null);
+    ttsPreloadRef.current = false;
     if (!article) return;
     const existing =
       lang === 'en' ? article.ai_summary_en
@@ -561,9 +665,9 @@ export default function ArticlePage() {
         </div>
       )}
 
-      <div className={`mx-auto flex flex-col lg:flex-row gap-6 lg:gap-8 ${isBilingualActive ? 'max-w-[1600px]' : 'max-w-[1200px]'}`}>
+      <div className={`mx-auto ${isBilingualActive ? 'max-w-[1400px]' : 'max-w-[900px]'}`}>
         {/* 主内容区 */}
-        <article className="min-w-0 flex-1" style={{ maxWidth: isBilingualActive ? undefined : 800 }}>
+        <article className="min-w-0">
           <div className="mb-4 sm:mb-6 flex items-center gap-1 sm:gap-2">
             <button
               onClick={() => router.back()}
@@ -597,14 +701,14 @@ export default function ArticlePage() {
           </div>
 
           <h1
-            className="mb-4 text-2xl font-semibold leading-tight md:text-3xl"
+            className="mb-2 text-2xl font-semibold leading-tight md:text-3xl"
             style={{ color: 'var(--text-primary)' }}
           >
-            {article.title}
+            {article.title_zh || article.title}
           </h1>
           {article.title_zh && article.title_zh !== article.title && (
-            <p className="mb-4 text-base" style={{ color: 'var(--text-secondary)' }}>
-              {article.title_zh}
+            <p className="mb-4 text-sm leading-snug" style={{ color: 'var(--text-secondary)', opacity: 0.75 }}>
+              {article.title}
             </p>
           )}
 
@@ -626,7 +730,7 @@ export default function ArticlePage() {
                 <span>·</span>
                 <span
                   className="rounded-full px-2.5 py-0.5 text-xs"
-                  style={{ background: 'rgba(0,230,118,0.12)', color: 'var(--accent)' }}
+                  style={{ background: 'rgba(0,255,157,0.12)', color: 'var(--accent)' }}
                 >
                   {article.categories.topic}
                 </span>
@@ -708,7 +812,7 @@ export default function ArticlePage() {
               disabled={summarizing}
               className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
-                background: 'rgba(0,230,118,0.12)',
+                background: 'rgba(0,255,157,0.12)',
                 color: 'var(--accent)',
                 border: '1px solid var(--border)',
               }}
@@ -721,7 +825,7 @@ export default function ArticlePage() {
               disabled={ttsLoading}
               className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
-                background: isSpeaking ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                background: isSpeaking ? 'rgba(0,255,157,0.12)' : 'var(--bg-secondary)',
                 color: isSpeaking ? 'var(--accent)' : 'var(--text-secondary)',
                 border: '1px solid var(--border)',
               }}
@@ -738,7 +842,7 @@ export default function ArticlePage() {
               disabled={translating}
               className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
-                background: bilingualMode ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                background: bilingualMode ? 'rgba(0,255,157,0.12)' : 'var(--bg-secondary)',
                 color: bilingualMode ? 'var(--accent)' : 'var(--text-secondary)',
                 border: '1px solid var(--border)',
               }}
@@ -758,7 +862,7 @@ export default function ArticlePage() {
               }}
               className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
-                background: starred ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                background: starred ? 'rgba(0,255,157,0.12)' : 'var(--bg-secondary)',
                 color: starred ? 'var(--accent)' : 'var(--text-secondary)',
                 border: '1px solid var(--border)',
               }}
@@ -777,7 +881,7 @@ export default function ArticlePage() {
               }}
               className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 text-sm transition-colors"
               style={{
-                background: saved ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                background: saved ? 'rgba(0,255,157,0.12)' : 'var(--bg-secondary)',
                 color: saved ? 'var(--accent)' : 'var(--text-secondary)',
                 border: '1px solid var(--border)',
               }}
@@ -815,15 +919,15 @@ export default function ArticlePage() {
             )}
           </div>
 
-          {/* 移动端 AI 摘要：操作栏下方、正文上方 */}
-          <div className={`lg:hidden mb-4 ${isBilingualActive ? 'hidden' : ''}`}>
+          {/* AI 摘要：操作栏下方、正文上方（所有设备可见；中英对照时强制显示中文） */}
+          <div className="mb-6">
             <div
-              className="rounded-xl border p-4"
+              className="rounded-xl border p-4 sm:p-5"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
             >
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={16} style={{ color: 'var(--accent)' }} />
+                  <Sparkles size={18} style={{ color: 'var(--accent)' }} />
                   <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                     AI 摘要
                   </h3>
@@ -831,7 +935,7 @@ export default function ArticlePage() {
                 {ttsPreloading && (
                   <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     <Loader2 size={10} className="animate-spin" />
-                    准备中
+                    音频准备中
                   </span>
                 )}
                 {preloadedAudioUrl && !ttsPreloading && (
@@ -842,6 +946,7 @@ export default function ArticlePage() {
                 )}
               </div>
 
+              {/* 语言切换（中 / EN / 日），中英对照模式下也保留 */}
               <div
                 className="mb-3 flex gap-1 rounded-lg p-1"
                 style={{ background: 'var(--bg-primary)' }}
@@ -871,7 +976,7 @@ export default function ArticlePage() {
                   </p>
                 </div>
               ) : currentSummary ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                     {currentSummary}
                   </p>
@@ -907,7 +1012,7 @@ export default function ArticlePage() {
 
             {article.keywords && article.keywords.length > 0 && (
               <div
-                className="mt-3 rounded-xl border p-4"
+                className="mt-3 rounded-xl border p-4 sm:p-5"
                 style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
               >
                 <h3 className="mb-2 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -919,7 +1024,7 @@ export default function ArticlePage() {
                       key={kw}
                       className="rounded-full px-2.5 py-1 text-xs"
                       style={{
-                        background: 'rgba(0,230,118,0.08)',
+                        background: 'rgba(0,255,157,0.08)',
                         color: 'var(--accent-secondary)',
                         border: '1px solid var(--border)',
                       }}
@@ -963,7 +1068,7 @@ export default function ArticlePage() {
             <div>
               <div
                 className="mb-4 flex items-center justify-between rounded-lg px-3 py-2 text-xs"
-                style={{ background: 'rgba(0,230,118,0.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,0.2)' }}
+                style={{ background: 'rgba(0,255,157,0.08)', color: 'var(--accent)', border: '1px solid rgba(0,255,157,0.2)' }}
               >
                 <div className="flex items-center gap-2">
                   <Languages size={12} />
@@ -1167,134 +1272,6 @@ export default function ArticlePage() {
             </div>
           )}
         </article>
-
-        {/* 右侧面板（桌面端侧栏固定；移动端已在操作栏下方内联显示；中英对照模式下完全隐藏） */}
-        <aside className={`hidden lg:block w-80 shrink-0 ${isBilingualActive ? '!hidden' : ''}`} style={{ position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
-          <div
-            className="rounded-xl border p-5"
-            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} style={{ color: 'var(--accent)' }} />
-                <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  AI 摘要
-                </h3>
-              </div>
-              {ttsPreloading && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  <Loader2 size={10} className="animate-spin" />
-                  音频准备中
-                </span>
-              )}
-              {preloadedAudioUrl && !ttsPreloading && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
-                  <span className="h-2 w-2 rounded-full bg-green-400" />
-                  音频已就绪
-                </span>
-              )}
-            </div>
-
-            {/* 语言切换 */}
-            <div
-              className="mb-4 flex gap-1 rounded-lg p-1"
-              style={{ background: 'var(--bg-primary)' }}
-            >
-              {LANGS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => handleLangSwitch(key)}
-                  className="flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                  style={{
-                    background: summaryLang === key ? 'var(--bg-hover)' : 'transparent',
-                    color: summaryLang === key ? 'var(--accent)' : 'var(--text-secondary)',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {summarizing ? (
-              <div className="space-y-3 py-4">
-                <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '100%' }} />
-                <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '85%' }} />
-                <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '90%' }} />
-                <div className="h-3 rounded-full animate-pulse" style={{ background: 'var(--bg-hover)', width: '70%' }} />
-                <p className="text-center text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
-                  正在为你生成 AI 摘要…
-                </p>
-              </div>
-            ) : currentSummary ? (
-              <div className="space-y-3">
-                <div className="max-h-72 overflow-y-auto pr-1">
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                    {currentSummary}
-                  </p>
-                </div>
-                {article.ai_key_points && article.ai_key_points.length > 0 && (
-                  <div>
-                    <h4 className="mb-2 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      关键要点
-                    </h4>
-                    <ul className="space-y-1.5">
-                      {article.ai_key_points.map((point, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <CheckCircle
-                            size={14}
-                            className="mt-0.5 shrink-0"
-                            style={{ color: 'var(--accent)' }}
-                          />
-                          <span style={{ color: 'var(--text-primary)' }}>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 py-6">
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  暂无 AI 摘要
-                </p>
-                <button
-                  onClick={handleSummarize}
-                  className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                  style={{ background: 'var(--accent)', color: '#000' }}
-                >
-                  生成 AI 摘要
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 关键词标签 */}
-          {article.keywords && article.keywords.length > 0 && (
-            <div
-              className="mt-4 rounded-xl border p-5"
-              style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
-            >
-              <h3 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                关键词
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {article.keywords.map((kw) => (
-                  <span
-                    key={kw}
-                    className="rounded-full px-2.5 py-1 text-xs"
-                    style={{
-                      background: 'rgba(0,230,118,0.08)',
-                      color: 'var(--accent-secondary)',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </aside>
       </div>
     </MainLayout>
   );

@@ -349,7 +349,7 @@ export default function ShareHistoryPage() {
         ) : (
           <div className="space-y-3">
             {shares.map((share) => {
-              const pColor = platformColors[share.platform] || { bg: 'rgba(0,230,118,0.08)', text: 'var(--accent-secondary)' };
+              const pColor = platformColors[share.platform] || { bg: 'rgba(0,255,157,0.08)', text: 'var(--accent-secondary)' };
               const imgs = parseImages(share.images);
 
               return (
@@ -432,7 +432,7 @@ export default function ShareHistoryPage() {
                 <span
                   className="rounded-full px-2.5 py-0.5 text-xs font-medium"
                   style={{
-                    background: (platformColors[detailShare.platform] || { bg: 'rgba(0,230,118,0.08)' }).bg,
+                    background: (platformColors[detailShare.platform] || { bg: 'rgba(0,255,157,0.08)' }).bg,
                     color: (platformColors[detailShare.platform] || { text: 'var(--accent-secondary)' }).text,
                   }}
                 >
@@ -619,7 +619,7 @@ export default function ShareHistoryPage() {
                         className="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors"
                         style={{
                           borderColor: selectedDigestId === d.id ? 'var(--accent)' : 'var(--border)',
-                          background: selectedDigestId === d.id ? 'rgba(0,230,118,0.08)' : 'transparent',
+                          background: selectedDigestId === d.id ? 'rgba(0,255,157,0.08)' : 'transparent',
                           color: 'var(--text-primary)',
                         }}
                       >

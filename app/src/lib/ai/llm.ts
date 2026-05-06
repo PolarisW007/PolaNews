@@ -61,7 +61,30 @@ export async function callLLM(
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = data.choices?.[0]?.message?.content ?? '';
-  return content.trim();
+  return stripReasoning(content).trim();
+}
+
+/**
+ * 某些推理模型（如 MiniMax-M 系列、DeepSeek-R1）会在正式输出前附加
+ * `<think>...</think>` 思维链。这里统一剥除，避免污染摘要/digest 正文。
+ * 兼容以下几种情况：
+ *   1. 完整闭合：`<think>...</think>正文` → 保留正文
+ *   2. 未闭合但有结尾标签：整体 `<think>...</think>...` 缺少起始标签 → 丢掉到 </think> 为止
+ *   3. 只有起始标签无结尾（罕见）：整体回退为原文
+ */
+function stripReasoning(text: string): string {
+  if (!text) return '';
+  let s = text;
+  // 情况 1 & 2：找到最后一个 </think>，取其后的内容
+  const endIdx = s.lastIndexOf('</think>');
+  if (endIdx !== -1) {
+    s = s.slice(endIdx + '</think>'.length);
+  } else {
+    // 情况 3：没有结尾；如果以 <think> 开头，保守地回退（不修改），让上层看到原文
+    // 但通过正则再尝试一次：去掉块级的 <think ...>（带属性）
+    s = s.replace(/^<think[^>]*>/i, '');
+  }
+  return s;
 }
 
 export async function classifyArticle(
@@ -208,16 +231,17 @@ export async function translateArticleBatch(
 
     try {
       const text = await callLLM(prompt, systemPrompt);
-      const match = text.match(/\[[\s\S]*\]/);
-      if (match) {
-        const parsed = JSON.parse(match[0]) as Array<{ idx: number; title_zh: string; summary_zh: string }>;
-        for (const item of parsed) {
-          const original = batch[item.idx];
+      const parsed = extractJsonArray(text) as Array<{ idx?: number; title_zh?: string; summary_zh?: string }>;
+      if (parsed && Array.isArray(parsed)) {
+        for (let k = 0; k < parsed.length; k++) {
+          const item = parsed[k] || {};
+          const idx = typeof item.idx === 'number' ? item.idx : k;
+          const original = batch[idx];
           if (original) {
             results.push({
               id: original.id,
-              title_zh: item.title_zh || original.title,
-              summary_zh: item.summary_zh || original.summary,
+              title_zh: (item.title_zh || '').trim() || original.title,
+              summary_zh: (item.summary_zh || '').trim() || original.summary,
             });
           }
         }
@@ -359,6 +383,43 @@ function extractJson(text: string): Record<string, unknown> {
     throw new Error('No JSON found in LLM response: ' + text.slice(0, 200));
   }
   return JSON.parse(match[0]) as Record<string, unknown>;
+}
+
+/**
+ * 宽松地从 LLM 输出里提取 JSON 数组：
+ * - 去掉 ```json / ``` 围栏
+ * - 取第一个 '[' 到最后一个 ']' 之间的内容
+ * - 常见的单引号、尾逗号、未闭合最后一项做兜底修复
+ * 解析失败时返回空数组（上游会回退到原文）。
+ */
+export function extractJsonArray(text: string): unknown[] {
+  if (!text) return [];
+  let t = text.trim();
+  // 去 markdown 围栏
+  t = t.replace(/^```(?:json|JSON)?\s*/m, '').replace(/```\s*$/m, '');
+  const first = t.indexOf('[');
+  const last = t.lastIndexOf(']');
+  if (first === -1 || last === -1 || last <= first) return [];
+  let body = t.slice(first, last + 1);
+  try {
+    return JSON.parse(body) as unknown[];
+  } catch { /* fall through */ }
+  // 兜底：去尾逗号、把智能引号换成普通引号
+  const repaired = body
+    .replace(/[""]/g, '"')
+    .replace(/['']/g, "'")
+    .replace(/,\s*([\]}])/g, '$1');
+  try {
+    return JSON.parse(repaired) as unknown[];
+  } catch { /* give up */ }
+  // 最后兜底：尝试逐对象解析
+  const items: unknown[] = [];
+  const objRegex = /\{[^{}]*\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = objRegex.exec(body)) !== null) {
+    try { items.push(JSON.parse(m[0])); } catch { /* skip */ }
+  }
+  return items;
 }
 
 function generateMockResponse(prompt: string, systemPrompt: string): string {

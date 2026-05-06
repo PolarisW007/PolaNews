@@ -42,6 +42,9 @@ export function rowToArticle(
     is_read: overrides?.is_read ?? Boolean(row.is_read),
     is_starred: overrides?.is_starred ?? Boolean(row.is_starred),
     is_saved: overrides?.is_saved ?? Boolean(row.is_saved),
+    audio_url: (row.audio_url as string) || '',
+    audio_url_en: (row.audio_url_en as string) || '',
+    audio_url_ja: (row.audio_url_ja as string) || '',
   };
 }
 

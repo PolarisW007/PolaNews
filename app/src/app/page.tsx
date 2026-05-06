@@ -45,6 +45,60 @@ const categories = [
   { key: 'society', label: '社会' },
 ];
 
+/**
+ * 剥离 HTML 标签、Unicode 零宽/全角空格，用于判断字符串是否真的有可见内容。
+ * 注意：过滤和显示必须使用同一套清洗逻辑，否则会出现「过滤放行但渲染空白」的挤压条 bug。
+ */
+function cleanText(s: string | undefined | null): string {
+  return (s || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/[\s\u200B-\u200F\u2028\u2029\u202F\u205F\u3000\uFEFF]/g, '')
+    .trim();
+}
+
+/**
+ * 选择当前语言下真正可显示的标题：
+ * 只有 title_zh 清洗后仍有内容才用中文标题，否则 fallback 到原文。
+ * 防止 title_zh='   '/'\u200B' 等「truthy 但视觉空白」的值让 h3 显示为空。
+ */
+function pickDisplayTitle(article: Article, displayLang: DisplayLang): string {
+  if (displayLang === 'zh' && cleanText(article.title_zh).length > 0) {
+    return article.title_zh as string;
+  }
+  return article.title;
+}
+
+/** 是否显示双语副标题：仅当中文标题真的有内容且与原文不同 */
+function shouldShowBilingual(article: Article, displayLang: DisplayLang): boolean {
+  return (
+    displayLang === 'zh' &&
+    cleanText(article.title_zh).length > 0 &&
+    article.title_zh !== article.title
+  );
+}
+
+/**
+ * 判断文章是否可渲染：必须有有效的标题（中文或原文），
+ * 去除空白与零宽字符、HTML 标签后仍有可见内容。
+ * 防止出现只剩边框的空卡片。
+ */
+function isRenderableArticle(a: Article): boolean {
+  if (!a || !a.id) return false;
+  return cleanText(a.title).length > 0 || cleanText(a.title_zh).length > 0;
+}
+
+/** 按 id 去重，保留先出现的那一条 */
+function dedupeById<T extends { id: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of list) {
+    if (!item || !item.id || seen.has(item.id)) continue;
+    seen.add(item.id);
+    result.push(item);
+  }
+  return result;
+}
+
 function SkeletonCard() {
   return (
     <div
@@ -86,13 +140,10 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
   });
   const isRead = useReadStatus(article.id);
 
-  const displayTitle = displayLang === 'zh' && article.title_zh
-    ? article.title_zh
-    : article.title;
+  const displayTitle = pickDisplayTitle(article, displayLang);
+  const showBilingual = shouldShowBilingual(article, displayLang);
 
-  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
-
-  const rawSummary = displayLang === 'zh' && article.summary_zh
+  const rawSummary = displayLang === 'zh' && cleanText(article.summary_zh).length > 0
     ? article.summary_zh
     : article.summary;
 
@@ -103,7 +154,7 @@ function ArticleCard({ article, displayLang }: { article: Article; displayLang: 
     : '';
 
   return (
-    <Link href={`/article/${article.id}`} onClick={() => markRead(article.id)}>
+    <Link href={`/article/${article.id}`} onClick={() => markRead(article.id)} className="block">
       <div
         className="glow-border animate-fade-in cursor-pointer rounded-xl p-5 transition-colors"
         style={{
@@ -186,13 +237,13 @@ function ArticleListItem({ article, displayLang }: { article: Article; displayLa
     locale: zhCN,
   });
   const isRead = useReadStatus(article.id);
-  const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
-  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
-  const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
+  const displayTitle = pickDisplayTitle(article, displayLang);
+  const showBilingual = shouldShowBilingual(article, displayLang);
+  const rawSummary = displayLang === 'zh' && cleanText(article.summary_zh).length > 0 ? article.summary_zh : article.summary;
   const truncatedSummary = rawSummary ? (rawSummary.length > 100 ? rawSummary.slice(0, 100) + '...' : rawSummary) : '';
 
   return (
-    <Link href={`/article/${article.id}`} onClick={() => markRead(article.id)}>
+    <Link href={`/article/${article.id}`} onClick={() => markRead(article.id)} className="block">
       <div
         className="animate-fade-in rounded-lg px-4 py-3 transition-colors cursor-pointer"
         style={{
@@ -245,15 +296,15 @@ function ArticleMagazineHero({ article, displayLang }: { article: Article; displ
     addSuffix: true,
     locale: zhCN,
   });
-  const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
-  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
-  const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
+  const displayTitle = pickDisplayTitle(article, displayLang);
+  const showBilingual = shouldShowBilingual(article, displayLang);
+  const rawSummary = displayLang === 'zh' && cleanText(article.summary_zh).length > 0 ? article.summary_zh : article.summary;
   const truncatedSummary = rawSummary
     ? rawSummary.length > 200 ? rawSummary.slice(0, 200) + '...' : rawSummary
     : '';
 
   return (
-    <Link href={`/article/${article.id}`}>
+    <Link href={`/article/${article.id}`} className="block">
       <div
         className="glow-border animate-fade-in cursor-pointer overflow-hidden rounded-xl transition-colors"
         style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
@@ -300,15 +351,15 @@ function ArticleMagazineSmall({ article, displayLang }: { article: Article; disp
     addSuffix: true,
     locale: zhCN,
   });
-  const displayTitle = displayLang === 'zh' && article.title_zh ? article.title_zh : article.title;
-  const showBilingual = displayLang === 'zh' && article.title_zh && article.title_zh !== article.title;
-  const rawSummary = displayLang === 'zh' && article.summary_zh ? article.summary_zh : article.summary;
+  const displayTitle = pickDisplayTitle(article, displayLang);
+  const showBilingual = shouldShowBilingual(article, displayLang);
+  const rawSummary = displayLang === 'zh' && cleanText(article.summary_zh).length > 0 ? article.summary_zh : article.summary;
   const truncatedSummary = rawSummary
     ? rawSummary.length > 80 ? rawSummary.slice(0, 80) + '...' : rawSummary
     : '';
 
   return (
-    <Link href={`/article/${article.id}`}>
+    <Link href={`/article/${article.id}`} className="block">
       <div
         className="glow-border animate-fade-in cursor-pointer overflow-hidden rounded-xl transition-colors"
         style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
@@ -401,10 +452,11 @@ export default function HomePage() {
       const result = raw as unknown as { articles: Article[]; total: number; page: number; limit: number };
       const list = Array.isArray(result.articles) ? result.articles : Array.isArray(raw) ? (raw as unknown as Article[]) : [];
 
+      const cleaned = list.filter(isRenderableArticle);
       if (append) {
-        setArticles((prev) => [...prev, ...list]);
+        setArticles((prev) => dedupeById([...prev, ...cleaned]));
       } else {
-        setArticles(list);
+        setArticles(dedupeById(cleaned));
       }
 
       setHasMore(list.length >= 20);
@@ -581,7 +633,7 @@ export default function HomePage() {
               onClick={() => setShowFilters(!showFilters)}
               className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all"
               style={{
-                backgroundColor: (filterImportance || filterSentiment || filterTimeRange) ? 'rgba(0,230,118,0.12)' : 'var(--bg-secondary)',
+                backgroundColor: (filterImportance || filterSentiment || filterTimeRange) ? 'rgba(0,255,157,0.12)' : 'var(--bg-secondary)',
                 color: (filterImportance || filterSentiment || filterTimeRange) ? 'var(--accent)' : 'var(--text-secondary)',
                 border: '1px solid var(--border)',
               }}
@@ -706,12 +758,12 @@ export default function HomePage() {
           )}
 
           {/* 抓取状态提示（带进度条） */}
-          {fetchMsg && (
+          {fetchMsg && fetchMsg.trim() && (
             <div
               className="mb-4 rounded-lg px-4 py-3 text-sm animate-fade-in overflow-hidden"
               style={{
-                backgroundColor: fetchMsg.startsWith('✓') ? 'rgba(0,230,118,0.1)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.1)' : 'rgba(0,230,118,0.05)',
-                border: `1px solid ${fetchMsg.startsWith('✓') ? 'rgba(0,230,118,0.2)' : fetchMsg.includes('失败') ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
+                backgroundColor: fetchMsg.startsWith('✓') ? 'rgba(0,255,157,0.1)' : fetchMsg.includes('失败') || fetchMsg.includes('超时') || fetchMsg.includes('出错') ? 'rgba(255,82,82,0.1)' : 'rgba(0,255,157,0.05)',
+                border: `1px solid ${fetchMsg.startsWith('✓') ? 'rgba(0,255,157,0.2)' : fetchMsg.includes('失败') ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
               }}
             >
               <div className="flex items-center gap-2">
@@ -765,7 +817,7 @@ export default function HomePage() {
             <>
               {viewMode === 'list' && (
                 <div className="space-y-2">
-                  {articles.map((article) => (
+                  {articles.filter(isRenderableArticle).map((article) => (
                     <ArticleListItem key={article.id} article={article} displayLang={displayLang} />
                   ))}
                 </div>
@@ -773,28 +825,31 @@ export default function HomePage() {
 
               {viewMode === 'card' && (
                 <div className="space-y-4">
-                  {articles.map((article) => (
+                  {articles.filter(isRenderableArticle).map((article) => (
                     <ArticleCard key={article.id} article={article} displayLang={displayLang} />
                   ))}
                 </div>
               )}
 
-              {viewMode === 'magazine' && (
-                <div>
-                  {articles.length > 0 && (
-                    <div className="mb-4">
-                      <ArticleMagazineHero article={articles[0]} displayLang={displayLang} />
-                    </div>
-                  )}
-                  {articles.length > 1 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      {articles.slice(1).map((article) => (
-                        <ArticleMagazineSmall key={article.id} article={article} displayLang={displayLang} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              {viewMode === 'magazine' && (() => {
+                const list = articles.filter(isRenderableArticle);
+                return (
+                  <div>
+                    {list.length > 0 && (
+                      <div className="mb-4">
+                        <ArticleMagazineHero article={list[0]} displayLang={displayLang} />
+                      </div>
+                    )}
+                    {list.length > 1 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        {list.slice(1).map((article) => (
+                          <ArticleMagazineSmall key={article.id} article={article} displayLang={displayLang} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {hasMore && (
                 <div className="mt-6 flex justify-center">
@@ -830,7 +885,7 @@ export default function HomePage() {
             }}
           >
             <h2
-              className="mb-4 flex items-center gap-2 text-sm font-semibold"
+              className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider"
               style={{ color: 'var(--accent)' }}
             >
               <Calendar size={16} />
@@ -838,16 +893,13 @@ export default function HomePage() {
             </h2>
 
             {digest ? (
-              <div>
-                <p className="mb-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {digest.date}
-                </p>
-                <p className="mb-3 text-sm" style={{ color: 'var(--text-primary)' }}>
-                  {digest.title || `包含 ${digest.headline_count} 条头条新闻`}
+              <div className="space-y-3">
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  包含 {digest.headline_count ?? 0} 条头条新闻
                 </p>
                 <Link
-                  href="/digest"
-                  className="flex items-center gap-1 text-sm font-medium transition-opacity hover:opacity-80"
+                  href={digest.date ? `/digest/${digest.date}` : '/digest'}
+                  className="inline-flex items-center gap-1 text-sm font-medium transition-opacity hover:opacity-80"
                   style={{ color: 'var(--accent)' }}
                 >
                   查看完整 Digest

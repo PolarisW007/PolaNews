@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne } from '@/lib/db/schema';
+import { execute, queryOne } from '@/lib/db/schema';
 import { synthesizeAudio } from '@/lib/services/tts';
 
 export async function POST(
@@ -10,7 +10,7 @@ export async function POST(
     const { id } = await params;
 
     const article = await queryOne(
-      'SELECT id, title, content, full_content, summary, ai_summary FROM articles WHERE id = $1',
+      'SELECT id, title, title_zh, content, full_content, summary, summary_zh, ai_summary, audio_url FROM articles WHERE id = $1',
       [id]
     ) as Record<string, string> | null;
 
@@ -21,9 +21,34 @@ export async function POST(
       );
     }
 
-    const rawText = article.ai_summary || article.summary ||
-      (article.full_content || article.content || '').replace(/<[^>]*>/g, '') ||
-      article.title;
+    let force = false;
+    let voice = 'longshu_v3';
+    try {
+      const body = await _req.json();
+      if (body?.voice) voice = String(body.voice);
+      if (body?.force) force = Boolean(body.force);
+    } catch { /* use default */ }
+
+    // 如果后端 scheduler 已经为该文章预合成过语音且调用方没强制重生成，直接返回缓存的 audio_url
+    if (!force && article.audio_url) {
+      const filename = article.audio_url.split('/').pop() || '';
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        data: {
+          url: article.audio_url,
+          filename,
+          article_id: id,
+          title: article.title_zh || article.title,
+        },
+      });
+    }
+
+    const rawText = article.title_zh
+      ? `${article.title_zh}。${article.summary_zh || article.ai_summary || article.summary || ''}`
+      : article.ai_summary || article.summary ||
+        (article.full_content || article.content || '').replace(/<[^>]*>/g, '') ||
+        article.title;
     const text = rawText.replace(/<[^>]*>/g, '').slice(0, 500);
 
     if (!text.trim()) {
@@ -32,12 +57,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    let voice = 'longshu_v3';
-    try {
-      const body = await _req.json();
-      if (body?.voice) voice = String(body.voice);
-    } catch { /* use default */ }
 
     const result = await synthesizeAudio(text.trim(), voice);
     if (!result) {
@@ -48,13 +67,26 @@ export async function POST(
     }
 
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    const url = `${basePath}/api/tts/audio/${result.filename}`;
+
+    // 持久化到 articles.audio_url，后续直接复用
+    try {
+      await execute(
+        'UPDATE articles SET audio_url = $1, audio_voice = $2 WHERE id = $3',
+        [url, voice, id]
+      );
+    } catch (e) {
+      console.error('[Broadcast] failed to persist audio_url:', e);
+    }
+
     return NextResponse.json({
       success: true,
+      cached: false,
       data: {
-        url: `${basePath}/api/tts/audio/${result.filename}`,
+        url,
         filename: result.filename,
         article_id: id,
-        title: article.title,
+        title: article.title_zh || article.title,
       },
     });
   } catch (err) {

@@ -92,7 +92,7 @@ export default function CategoriesPage() {
                 >
                   <div
                     className="w-12 h-12 rounded-lg flex items-center justify-center mb-4"
-                    style={{ backgroundColor: 'rgba(0,230,118,0.08)', color: 'var(--accent)' }}
+                    style={{ backgroundColor: 'rgba(0,255,157,0.08)', color: 'var(--accent)' }}
                   >
                     {cat.icon}
                   </div>

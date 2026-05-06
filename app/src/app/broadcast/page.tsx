@@ -182,7 +182,7 @@ export default function BroadcastListPage() {
         {generating && (
           <div
             className="mb-4 flex items-center gap-3 rounded-xl border p-4"
-            style={{ background: 'rgba(0,230,118,0.06)', borderColor: 'var(--accent)' }}
+            style={{ background: 'rgba(0,255,157,0.06)', borderColor: 'var(--accent)' }}
           >
             <Loader2 size={18} className="animate-spin shrink-0" style={{ color: 'var(--accent)' }} />
             <div>
@@ -233,7 +233,7 @@ export default function BroadcastListPage() {
               >
                 <div
                   className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg"
-                  style={{ background: 'rgba(0,230,118,0.1)' }}
+                  style={{ background: 'rgba(0,255,157,0.1)' }}
                 >
                   <Radio size={20} style={{ color: 'var(--accent)' }} />
                 </div>
@@ -267,7 +267,7 @@ export default function BroadcastListPage() {
                 <span
                   className="rounded-full px-3 py-1 text-xs"
                   style={{
-                    background: b.status === 'ready' ? 'rgba(0,230,118,0.08)' : 'rgba(255,152,0,0.08)',
+                    background: b.status === 'ready' ? 'rgba(0,255,157,0.08)' : 'rgba(255,152,0,0.08)',
                     color: b.status === 'ready' ? 'var(--accent-secondary)' : '#FFB74D',
                     border: '1px solid var(--border)',
                   }}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Rss, Plus, Trash2, Loader2, ExternalLink, Upload, Download } from 'lucide-react';
+import { Rss, Plus, Trash2, Loader2, ExternalLink, Upload, Download, RefreshCw } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api-client';
@@ -53,8 +53,36 @@ export default function SubscriptionsPage() {
   };
 
   const [importing, setImporting] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+  /** 立即抓取：触发完整管道（fetch → translate → classify → TTS），后台异步跑 */
+  const handleFetchAll = async () => {
+    if (fetching) return;
+    setFetching(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${basePath}/api/feeds/fetch`, { method: 'POST', headers });
+      const json = await res.json();
+      if (json.success) {
+        const counters = json.data || {};
+        toast(
+          `抓取完成：新增 ${counters.articles_count ?? 0} 篇，翻译 ${counters.newly_translated ?? 0}，合成语音 ${counters.newly_voiced ?? 0}`,
+          'success'
+        );
+        loadFeeds();
+      } else {
+        toast(json.error || '抓取失败', 'error');
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '抓取失败', 'error');
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const handleImportOPML = async () => {
     const input = document.createElement('input');
@@ -133,6 +161,16 @@ export default function SubscriptionsPage() {
             </button>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleFetchAll}
+              disabled={fetching}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs sm:text-sm font-medium text-black transition-colors hover:brightness-110 disabled:opacity-60"
+              style={{ backgroundColor: 'var(--accent)' }}
+              title="立即触发完整抓取管道：fetch → translate → classify → TTS（约需 2-3 分钟）"
+            >
+              {fetching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              <span className="hidden sm:inline">立即</span>抓取
+            </button>
             <button
               onClick={handleImportOPML}
               disabled={importing}
@@ -240,7 +278,7 @@ export default function SubscriptionsPage() {
                       <span
                         className="text-xs px-2 py-0.5 rounded"
                         style={{
-                          backgroundColor: feed.status === 'active' ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)',
+                          backgroundColor: feed.status === 'active' ? 'rgba(0,255,157,0.1)' : 'rgba(255,82,82,0.1)',
                           color: feed.status === 'active' ? 'var(--accent)' : 'var(--danger)',
                         }}
                       >

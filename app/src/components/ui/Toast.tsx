@@ -62,7 +62,7 @@ function ToastMessage({ item, onDismiss }: { item: ToastItem; onDismiss: (id: nu
   }, []);
 
   const colors: Record<ToastType, { bg: string; border: string; text: string }> = {
-    success: { bg: 'rgba(0,230,118,0.12)', border: 'rgba(0,230,118,0.3)', text: '#00e676' },
+    success: { bg: 'rgba(0,255,157,0.12)', border: 'rgba(0,255,157,0.3)', text: '#00ff9d' },
     error: { bg: 'rgba(255,82,82,0.12)', border: 'rgba(255,82,82,0.3)', text: '#ff5252' },
     info: { bg: 'rgba(100,181,246,0.12)', border: 'rgba(100,181,246,0.3)', text: '#64b5f6' },
   };

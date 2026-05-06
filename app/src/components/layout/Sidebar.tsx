@@ -134,14 +134,26 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const sidebarContent = (
     <>
       <div className="flex items-center justify-between px-6 py-6 lg:py-8">
-        <div>
-          <h1 className="text-xl font-bold tracking-wide" style={{ color: 'var(--accent)' }}>
-            一念三千
-          </h1>
-          <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            全球资讯 AI 聚合
-          </p>
-        </div>
+        <Link
+          href="/"
+          onClick={handleNavClick}
+          className="flex items-center gap-3"
+        >
+          <img
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo.png`}
+            alt="Logo"
+            className="h-10 w-10 rounded-lg object-cover"
+            style={{ border: '1px solid var(--border)' }}
+          />
+          <div>
+            <h1 className="text-xl font-bold tracking-wide" style={{ color: 'var(--accent)' }}>
+              一念三千
+            </h1>
+            <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              全球资讯 AI 聚合
+            </p>
+          </div>
+        </Link>
         <button
           onClick={onClose}
           className="lg:hidden flex items-center justify-center rounded-lg p-2 transition-colors"

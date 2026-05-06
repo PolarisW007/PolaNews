@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateDailyDigest } from '@/lib/services/digest';
+import { invalidateDigestCache } from '@/lib/services/digest-cache';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     const digest = await generateDailyDigest(lang);
+    invalidateDigestCache();
 
     return NextResponse.json({
       success: true,

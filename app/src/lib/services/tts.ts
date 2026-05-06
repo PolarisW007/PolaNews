@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { execute, queryOne } from '../db/schema';
+import { execute, query, queryOne } from '../db/schema';
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.COSYVOICE_API_KEY || '';
 
@@ -178,4 +178,57 @@ export async function generateBroadcastAudio(broadcastId: string): Promise<boole
   );
 
   return true;
+}
+
+/**
+ * 为已翻译但没有语音的最新文章预合成中文语音并持久化 audio_url。
+ * 优先使用 title_zh + summary_zh / ai_summary，回退到原文标题+摘要。
+ * 失败时不抛错，仅跳过该条；返回成功合成的数量。
+ */
+export async function synthesizePendingAudio(
+  limit = 20,
+  voice = 'longshu_v3'
+): Promise<number> {
+  const rows = await query<{
+    id: string;
+    title: string;
+    title_zh: string;
+    summary: string;
+    summary_zh: string;
+    ai_summary: string;
+  }>(
+    `SELECT id, title, title_zh, summary, summary_zh, ai_summary
+     FROM articles
+     WHERE (audio_url IS NULL OR audio_url = '')
+       AND (title_zh IS NOT NULL AND title_zh <> '')
+     ORDER BY published_at DESC NULLS LAST, created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  if (rows.length === 0) return 0;
+
+  let synthesized = 0;
+  for (const row of rows) {
+    const title = (row.title_zh || row.title || '').trim();
+    const body = (row.summary_zh || row.ai_summary || row.summary || '').trim();
+    const text = (title && body ? `${title}。${body}` : title || body).slice(0, 500);
+    if (!text) continue;
+
+    try {
+      const result = await synthesizeAudio(text, voice);
+      if (!result) continue;
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+      const url = `${basePath}/api/tts/audio/${result.filename}`;
+      await execute(
+        'UPDATE articles SET audio_url = $1, audio_voice = $2 WHERE id = $3',
+        [url, voice, row.id]
+      );
+      synthesized++;
+    } catch (e) {
+      console.error('[TTS] synthesizePendingAudio failed for', row.id, e);
+    }
+  }
+
+  return synthesized;
 }

@@ -326,14 +326,14 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
                 }}
                 className="p-2 rounded-lg cursor-pointer text-sm mb-1 transition-colors flex items-center gap-2"
                 style={{
-                  backgroundColor: i === currentSegment ? 'rgba(0,230,118,0.1)' : 'transparent',
+                  backgroundColor: i === currentSegment ? 'rgba(0,255,157,0.1)' : 'transparent',
                   color: i === currentSegment ? 'var(--accent)' : 'var(--text-secondary)',
                   borderLeft: i === currentSegment ? '2px solid var(--accent)' : '2px solid transparent',
                 }}
               >
                 <span className="flex-1 truncate">{seg.text.slice(0, 100)}...</span>
                 {seg.audio_url && (
-                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,230,118,0.15)', color: 'var(--accent)' }}>
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,255,157,0.15)', color: 'var(--accent)' }}>
                     音频
                   </span>
                 )}
