@@ -1,11 +1,12 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { RefreshCw, Loader2, Newspaper, ArrowRight, Calendar, Globe, ChevronDown, SlidersHorizontal, List, LayoutGrid, BookOpen } from 'lucide-react';
-import { clsx } from 'clsx';
 import MainLayout from '@/components/layout/MainLayout';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api-client';
@@ -34,6 +35,17 @@ interface Digest {
   headline_count: number;
   title: string;
 }
+
+interface ArticleListResponse {
+  articles: Article[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+const ARTICLE_PAGE_SIZE = 20;
+const ARTICLE_CACHE_TTL = 5 * 60 * 1000;
+const ARTICLE_CACHE_PREFIX = 'polanews:home:v3:';
 
 const categories = [
   { key: '', label: '全部' },
@@ -99,6 +111,48 @@ function dedupeById<T extends { id: string }>(list: T[]): T[] {
   return result;
 }
 
+function getArticleCacheKey(params: Record<string, string | number>) {
+  const normalized = Object.entries(params)
+    .filter(([, value]) => value !== '' && value !== undefined && value !== null)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `${ARTICLE_CACHE_PREFIX}${JSON.stringify(normalized)}`;
+}
+
+function readArticleCache(key: string): ArticleListResponse | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts: number; data: ArticleListResponse };
+    if (!parsed?.ts || Date.now() - parsed.ts > ARTICLE_CACHE_TTL) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeArticleCache(key: string, data: ArticleListResponse) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // Ignore quota errors; the network path still works.
+  }
+}
+
+function clearArticleCache() {
+  if (typeof window === 'undefined') return;
+  for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {
+    const key = sessionStorage.key(i);
+    if (key?.startsWith(ARTICLE_CACHE_PREFIX)) {
+      sessionStorage.removeItem(key);
+    }
+  }
+}
+
 function SkeletonCard() {
   return (
     <div
@@ -118,12 +172,11 @@ function SkeletonCard() {
 
 /** 读取已读状态（localStorage） */
 function useReadStatus(articleId: string) {
-  const [isRead, setIsRead] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  const [isRead] = useState(() => {
+    if (typeof window === 'undefined') return false;
     const read = localStorage.getItem(`read_${articleId}`);
-    setIsRead(!!read);
-  }, [articleId]);
+    return !!read;
+  });
   return isRead;
 }
 
@@ -416,6 +469,10 @@ export default function HomePage() {
   const [filterImportance, setFilterImportance] = useState('');
   const [filterSentiment, setFilterSentiment] = useState('');
   const [filterTimeRange, setFilterTimeRange] = useState('');
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const pageRef = useRef(1);
 
   const langOptions: { key: DisplayLang; label: string }[] = [
     { key: 'zh', label: '中文' },
@@ -423,7 +480,19 @@ export default function HomePage() {
     { key: 'original', label: '原文' },
   ];
 
-  const fetchArticles = useCallback(async (category: string, pageNum: number, append = false) => {
+  useEffect(() => {
+    loadingMoreRef.current = loadingMore;
+  }, [loadingMore]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  const fetchArticles = useCallback(async (category: string, pageNum: number, append = false, options?: { bypassCache?: boolean }) => {
     try {
       if (append) {
         setLoadingMore(true);
@@ -431,7 +500,7 @@ export default function HomePage() {
         setLoading(true);
       }
 
-      const params: Record<string, string | number> = { page: pageNum, limit: 20 };
+      const params: Record<string, string | number> = { page: pageNum, limit: ARTICLE_PAGE_SIZE };
       if (category) params.category = category;
       if (filterImportance) params.importance = filterImportance;
       if (filterSentiment) params.sentiment = filterSentiment;
@@ -448,9 +517,11 @@ export default function HomePage() {
         }
       }
 
-      const raw = await api.articles.list(params);
-      const result = raw as unknown as { articles: Article[]; total: number; page: number; limit: number };
-      const list = Array.isArray(result.articles) ? result.articles : Array.isArray(raw) ? (raw as unknown as Article[]) : [];
+      const cacheKey = getArticleCacheKey(params);
+      const cached = options?.bypassCache ? null : readArticleCache(cacheKey);
+      const result = cached || (await api.articles.list(params) as ArticleListResponse);
+      if (!cached) writeArticleCache(cacheKey, result);
+      const list = Array.isArray(result.articles) ? result.articles : [];
 
       const cleaned = list.filter(isRenderableArticle);
       if (append) {
@@ -459,7 +530,7 @@ export default function HomePage() {
         setArticles(dedupeById(cleaned));
       }
 
-      setHasMore(list.length >= 20);
+      setHasMore(pageNum * ARTICLE_PAGE_SIZE < (result.total || 0) && list.length > 0);
     } catch {
       toast('加载文章失败，请稍后重试', 'error');
       if (!append) setArticles([]);
@@ -467,7 +538,7 @@ export default function HomePage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [filterImportance, filterSentiment, filterTimeRange]);
+  }, [filterImportance, filterSentiment, filterTimeRange, toast]);
 
   const fetchDigest = useCallback(async () => {
     try {
@@ -476,7 +547,7 @@ export default function HomePage() {
     } catch {
       toast('加载今日摘要失败', 'error');
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     setPage(1);
@@ -500,10 +571,32 @@ export default function HomePage() {
   }, [showLangMenu]);
 
   const handleLoadMore = () => {
-    const nextPage = page + 1;
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+    loadingMoreRef.current = true;
+    const nextPage = pageRef.current + 1;
+    pageRef.current = nextPage;
     setPage(nextPage);
     fetchArticles(activeCategory, nextPage, true);
   };
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting || loadingMoreRef.current || !hasMoreRef.current || loading) return;
+        loadingMoreRef.current = true;
+        const nextPage = pageRef.current + 1;
+        pageRef.current = nextPage;
+        setPage(nextPage);
+        fetchArticles(activeCategory, nextPage, true);
+      },
+      { root: null, rootMargin: '520px 0px', threshold: 0.01 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [activeCategory, fetchArticles, loading]);
 
   const [fetchMsg, setFetchMsg] = useState('');
   const [fetchProgress, setFetchProgress] = useState(0); // 0-100
@@ -546,10 +639,11 @@ export default function HomePage() {
 
       if (json.success) {
         setFetchMsg(`✓ 抓取完成！${json.data.feeds_count} 个源，新增 ${json.data.articles_count} 篇文章`);
+        clearArticleCache();
         setPage(1);
-        await fetchArticles(activeCategory, 1);
+        await fetchArticles(activeCategory, 1, false, { bypassCache: true });
         setTimeout(() => {
-          fetchArticles(activeCategory, 1);
+          fetchArticles(activeCategory, 1, false, { bypassCache: true });
           setFetchMsg('');
           setFetchProgress(0);
         }, 5000);
@@ -851,8 +945,10 @@ export default function HomePage() {
                 );
               })()}
 
-              {hasMore && (
-                <div className="mt-6 flex justify-center">
+              <div ref={loadMoreRef} className="h-8" aria-hidden="true" />
+
+              {hasMore ? (
+                <div className="mt-2 flex justify-center">
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
@@ -869,6 +965,10 @@ export default function HomePage() {
                     {loadingMore ? '加载中...' : '加载更多'}
                   </button>
                 </div>
+              ) : (
+                <p className="mt-4 text-center text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  已加载全部内容
+                </p>
               )}
             </>
           )}

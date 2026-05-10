@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { toPng } from 'html-to-image';
 import {
   ArrowLeft,
   Loader2,
@@ -12,6 +13,7 @@ import {
   FileText,
   Hash,
   Radio,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { DailyDigest, DigestHeadline, DigestCategorySummary } from '@/lib/types';
@@ -26,7 +28,7 @@ function markdownToHtml(md: string): string {
   let inList = false;
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
 
     // 水平线
     if (/^---+$/.test(line.trim())) {
@@ -87,6 +89,143 @@ const LANGS = [
   { key: 'ja', label: '日' },
 ] as const;
 
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  a.click();
+}
+
+function DigestPoster({
+  digest,
+  headlines,
+  categories,
+  displayDate,
+}: {
+  digest: DailyDigest;
+  headlines: DigestHeadline[];
+  categories: Record<string, DigestCategorySummary>;
+  displayDate: string;
+}) {
+  const posterItems = headlines.length > 0
+    ? headlines.slice(0, 8)
+    : Object.values(categories)
+        .flatMap((cat) => cat.items || [])
+        .slice(0, 8)
+        .map((item) => ({ ...item, importance: 'normal', category: 'Digest' } as DigestHeadline));
+  const stats = digest.statistics;
+  const keywords = ((stats?.top_keywords || digest.trending_keywords || []) as string[]).slice(0, 5);
+  const categoryNames = Object.keys(categories).slice(0, 4);
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-[28px] p-6"
+      style={{
+        width: 760,
+        minHeight: 1180,
+        background: 'linear-gradient(180deg, #041424 0%, #06111f 48%, #030912 100%)',
+        color: '#f7fbff',
+        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <div
+        className="absolute inset-0 opacity-70"
+        style={{
+          background:
+            'radial-gradient(circle at 15% 10%, rgba(25, 255, 213, 0.24), transparent 28%), radial-gradient(circle at 92% 8%, rgba(255, 199, 100, 0.18), transparent 26%), linear-gradient(90deg, rgba(79, 228, 224, 0.09) 1px, transparent 1px), linear-gradient(0deg, rgba(79, 228, 224, 0.07) 1px, transparent 1px)',
+          backgroundSize: 'auto, auto, 48px 48px, 48px 48px',
+        }}
+      />
+      <div className="relative">
+        <div className="mb-8 flex items-center justify-center">
+          <div
+            className="rounded-2xl px-5 py-2 text-3xl font-black tracking-[0.18em]"
+            style={{ color: '#57ffe4', textShadow: '0 0 22px rgba(87,255,228,0.45)' }}
+          >
+            一念三千
+          </div>
+        </div>
+
+        <div className="mb-9 text-center">
+          <div
+            className="text-6xl font-black leading-tight"
+            style={{ color: '#f3c96f', textShadow: '0 3px 0 #6e5228, 0 0 26px rgba(243,201,111,0.42)' }}
+          >
+            {displayDate}
+          </div>
+          <div
+            className="mt-3 text-5xl font-black leading-tight"
+            style={{ color: '#f7d98b', textShadow: '0 3px 0 #5e4725, 0 0 18px rgba(247,217,139,0.35)' }}
+          >
+            全球资讯 AI 速览
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {posterItems.map((item, index) => {
+            const accent = index % 3 === 0 ? '#6fffea' : index % 3 === 1 ? '#66d8ff' : '#ffe09a';
+            return (
+              <div
+                key={`${item.title}-${index}`}
+                className="relative grid items-center gap-5 overflow-hidden rounded-2xl px-5 py-4"
+                style={{
+                  gridTemplateColumns: '130px 1fr',
+                  background: 'linear-gradient(90deg, rgba(15, 82, 86, 0.82), rgba(24, 26, 49, 0.92))',
+                  border: '1px solid rgba(119,255,240,0.45)',
+                  boxShadow: '0 0 18px rgba(57,255,226,0.14), inset 0 0 26px rgba(255,255,255,0.04)',
+                }}
+              >
+                <div
+                  className="absolute right-4 top-3 h-2 w-32 rounded-full"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,217,140,0.86))' }}
+                />
+                <div className="flex h-28 w-28 items-center justify-center rounded-2xl text-5xl font-black"
+                  style={{
+                    color: accent,
+                    background: 'rgba(0,0,0,0.22)',
+                    border: '1px solid rgba(130,255,242,0.24)',
+                  }}
+                >
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <div className="min-w-0">
+                  <div className="mb-1 flex items-center gap-3">
+                    <h3 className="truncate text-4xl font-black leading-tight" style={{ color: accent }}>
+                      {item.title}
+                    </h3>
+                  </div>
+                  <p className="line-clamp-2 text-2xl font-bold leading-snug" style={{ color: '#f2f6f3' }}>
+                    {item.summary || item.category || '今日重点资讯'}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div
+          className="mt-8 rounded-2xl px-7 py-5 text-center text-3xl font-black leading-snug"
+          style={{
+            background: 'linear-gradient(90deg, rgba(6, 40, 57, 0.92), rgba(15, 32, 51, 0.92))',
+            border: '1px solid rgba(91,255,229,0.28)',
+            color: '#f4f7f2',
+          }}
+        >
+          <span>{stats?.total_articles || posterItems.length} 条资讯</span>
+          <span style={{ color: '#f3c96f' }}> · </span>
+          <span>{stats?.source_count || categoryNames.length || 1} 个信息源</span>
+          {keywords.length > 0 && (
+            <>
+              <span style={{ color: '#f3c96f' }}> · </span>
+              <span>{keywords.join(' / ')}</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DigestDetailPage() {
   const { date } = useParams<{ date: string }>();
   const router = useRouter();
@@ -99,6 +238,8 @@ export default function DigestDetailPage() {
   /** 预加载的 TTS 音频 URL：key=segment index */
   const [preloadedAudio, setPreloadedAudio] = useState<Record<number, string>>({});
   const [audioPreloading, setAudioPreloading] = useState(false);
+  const [posterExporting, setPosterExporting] = useState(false);
+  const posterRef = useRef<HTMLDivElement | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -150,6 +291,24 @@ export default function DigestDetailPage() {
   const handleGenerateBroadcast = () => {
     if (!digest) return;
     setShowPlayer((v) => !v);
+  };
+
+  const handleExportPoster = async () => {
+    if (!digest || !posterRef.current) return;
+    setPosterExporting(true);
+    try {
+      const dataUrl = await toPng(posterRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#041424',
+      });
+      downloadDataUrl(dataUrl, `digest-poster-${date || digest.digest_date}.png`);
+      toast('Digest 海报已生成', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '生成海报失败', 'error');
+    } finally {
+      setPosterExporting(false);
+    }
   };
 
   /** 构造播放器的段落：优先 headlines（短句更适合播报），没有时退回 full_content 段落 */
@@ -368,6 +527,36 @@ export default function DigestDetailPage() {
             </div>
           </div>
         )}
+
+        {/* 海报生成 */}
+        <section className="mb-6 sm:mb-8">
+          <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Digest 图片海报
+            </h2>
+            <button
+              onClick={handleExportPoster}
+              disabled={posterExporting}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60"
+              style={{ background: 'var(--accent)', color: '#000' }}
+            >
+              {posterExporting ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+              下载 PNG
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}>
+            <div className="origin-top-left" style={{ transform: 'scale(0.5)', transformOrigin: 'top left', width: 760, height: 1180, marginBottom: -590 }}>
+              <div ref={posterRef}>
+                <DigestPoster
+                  digest={digest}
+                  headlines={headlines as DigestHeadline[]}
+                  categories={categories as Record<string, DigestCategorySummary>}
+                  displayDate={date || digest.digest_date}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* 头条新闻 */}
         {headlines.length > 0 && (

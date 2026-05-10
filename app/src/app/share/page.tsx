@@ -1,6 +1,9 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { toPng } from 'html-to-image';
 import {
   Share2,
   Plus,
@@ -17,6 +20,7 @@ import {
   ExternalLink,
   Twitter,
   Sparkles,
+  Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
@@ -71,6 +75,148 @@ const PlatformIcon = ({ platform, size = 18, color }: { platform: string; size?:
   }
 };
 
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  a.click();
+}
+
+// 海报只展示中文信息部分：剔除英文推文引用行，清理 markdown 残留
+function extractChineseLines(content: string) {
+  const rawLines = (content || '').split(/\n+/);
+  const zhMarkerIndex = rawLines.findIndex((line) => /中文版本|中文版/.test(line));
+  const sourceLines = zhMarkerIndex >= 0 ? rawLines.slice(zhMarkerIndex + 1) : rawLines;
+
+  return sourceLines
+    .map((line) =>
+      line
+        // 去掉行首的 markdown 标记：引用 >、列表 - * #、空白
+        .replace(/^[>\-*#\s]+/, '')
+        // 去掉 markdown 粗体/斜体包裹符号
+        .replace(/\*\*/g, '')
+        .replace(/__/g, '')
+        .trim(),
+    )
+    .filter((line) => {
+      if (!line || !/[\u4e00-\u9fa5]/.test(line)) return false;
+      const label = line.replace(/^[^\u4e00-\u9fa5A-Za-z0-9]+/, '');
+      if (/^(中文版本|中文版|每日新闻摘要|日期[:：]?|推文#?\d+|微博#?\d+)/.test(label)) return false;
+      if (/^[-—]{2,}$/.test(line)) return false;
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function SharePoster({ share }: { share: SocialShare }) {
+  const lines = extractChineseLines(share.content);
+  const platformName = platformLabels[share.platform] || 'Share';
+  const posterTitle = lines[0] || share.title || '今日资讯分享';
+  const fallbackLines = lines.length > 1 ? lines.slice(1) : lines.length > 0 ? lines : ['今日重点内容'];
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-[28px] p-6"
+      style={{
+        width: 760,
+        minHeight: 1080,
+        background: 'linear-gradient(180deg, #031525 0%, #071624 52%, #04080f 100%)',
+        color: '#f8fbff',
+        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(circle at 18% 8%, rgba(84,255,224,0.28), transparent 28%), radial-gradient(circle at 84% 14%, rgba(255,204,112,0.22), transparent 30%), linear-gradient(90deg, rgba(98,255,232,0.07) 1px, transparent 1px), linear-gradient(0deg, rgba(98,255,232,0.06) 1px, transparent 1px)',
+          backgroundSize: 'auto, auto, 46px 46px, 46px 46px',
+        }}
+      />
+      <div className="relative">
+        <div className="mb-7 flex items-center justify-between">
+          <div>
+            <div className="text-3xl font-black tracking-[0.14em]" style={{ color: '#58ffe2' }}>一念三千</div>
+            <div className="mt-1 text-lg font-bold uppercase tracking-[0.28em]" style={{ color: 'rgba(248,251,255,0.64)' }}>
+              {platformName} POSTER
+            </div>
+          </div>
+          <div
+            className="rounded-full px-5 py-2 text-xl font-black"
+            style={{
+              background: 'rgba(88,255,226,0.12)',
+              border: '1px solid rgba(88,255,226,0.38)',
+              color: '#f3c96f',
+            }}
+          >
+            AI SHARE
+          </div>
+        </div>
+
+        <div className="mb-8 text-center">
+          <h1
+            className="text-5xl font-black leading-tight"
+            style={{ color: '#f4ce78', textShadow: '0 3px 0 #59421f, 0 0 26px rgba(244,206,120,0.34)' }}
+          >
+            {posterTitle}
+          </h1>
+        </div>
+
+        <div className="space-y-4">
+          {fallbackLines.map((line, index) => {
+            const accent = index % 2 === 0 ? '#68fff0' : '#ffd889';
+            return (
+              <div
+                key={`${line}-${index}`}
+                className="relative grid items-center gap-5 overflow-hidden rounded-2xl px-5 py-4"
+                style={{
+                  gridTemplateColumns: '106px 1fr',
+                  background: 'linear-gradient(90deg, rgba(13, 78, 82, 0.88), rgba(25, 27, 50, 0.93))',
+                  border: '1px solid rgba(121,255,240,0.42)',
+                  boxShadow: '0 0 18px rgba(57,255,226,0.14), inset 0 0 24px rgba(255,255,255,0.04)',
+                }}
+              >
+                <div
+                  className="absolute right-4 top-3 h-2 w-28 rounded-full"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,217,140,0.78))' }}
+                />
+                <div
+                  className="flex h-24 w-24 items-center justify-center rounded-2xl text-4xl font-black"
+                  style={{
+                    color: accent,
+                    background: 'rgba(0,0,0,0.2)',
+                    border: '1px solid rgba(130,255,242,0.24)',
+                  }}
+                >
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <p className="line-clamp-3 text-3xl font-black leading-snug" style={{ color: index % 2 === 0 ? '#f4f9f4' : '#ffe2a5' }}>
+                  {line}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div
+          className="mt-8 rounded-2xl px-7 py-5 text-center text-3xl font-black leading-snug"
+          style={{
+            background: 'linear-gradient(90deg, rgba(6, 40, 57, 0.92), rgba(15, 32, 51, 0.92))',
+            border: '1px solid rgba(91,255,229,0.28)',
+            color: '#f4f7f2',
+          }}
+        >
+          <span>{platformName}</span>
+          <span style={{ color: '#f3c96f' }}> · </span>
+          <span>{format(new Date(share.created_at), 'yyyy-MM-dd')}</span>
+          <span style={{ color: '#f3c96f' }}> · </span>
+          <span>长按保存分享图</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ImageGeneratingPlaceholder({ className = '', style = {} }: { className?: string; style?: React.CSSProperties }) {
   return (
     <div
@@ -98,6 +244,7 @@ export default function ShareHistoryPage() {
 
   const [generating, setGenerating] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [posterExporting, setPosterExporting] = useState(false);
   const [modalPlatform, setModalPlatform] = useState<ModalPlatform>('xiaohongshu');
   const [digests, setDigests] = useState<Digest[]>([]);
   const [selectedDigestId, setSelectedDigestId] = useState('');
@@ -105,6 +252,7 @@ export default function ShareHistoryPage() {
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const detailPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const posterRef = useRef<HTMLDivElement | null>(null);
 
   const fetchShares = useCallback(async () => {
     setLoading(true);
@@ -166,9 +314,12 @@ export default function ShareHistoryPage() {
     };
   }, [shares, activeTab, detailShare]);
 
+  const detailShareId = detailShare?.id || '';
+  const detailShareStatus = detailShare?.image_status || '';
+
   // Poll for the detail modal's share image status
   useEffect(() => {
-    if (!detailShare || detailShare.image_status !== 'generating') {
+    if (!detailShareId || detailShareStatus !== 'generating') {
       if (detailPollRef.current) {
         clearInterval(detailPollRef.current);
         detailPollRef.current = null;
@@ -178,7 +329,7 @@ export default function ShareHistoryPage() {
 
     detailPollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`${basePath}/api/share/${detailShare.id}`);
+        const res = await fetch(`${basePath}/api/share/${detailShareId}`);
         const json = await res.json();
         if (json.success && json.data) {
           const updated = json.data as SocialShare;
@@ -201,7 +352,7 @@ export default function ShareHistoryPage() {
         detailPollRef.current = null;
       }
     };
-  }, [detailShare?.id, detailShare?.image_status, toast]);
+  }, [detailShareId, detailShareStatus, toast]);
 
   const handleOpenModal = () => {
     setShowModal(true);
@@ -250,6 +401,24 @@ export default function ShareHistoryPage() {
       toast(e instanceof Error ? e.message : '重新生成失败', 'error');
     } finally {
       setRegenerating(false);
+    }
+  };
+
+  const handleExportPoster = async (share: SocialShare) => {
+    if (!posterRef.current) return;
+    setPosterExporting(true);
+    try {
+      const dataUrl = await toPng(posterRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#031525',
+      });
+      downloadDataUrl(dataUrl, `share-poster-${share.id.slice(0, 8)}.png`);
+      toast('分享海报已生成', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '生成海报失败', 'error');
+    } finally {
+      setPosterExporting(false);
     }
   };
 
@@ -335,7 +504,7 @@ export default function ShareHistoryPage() {
             <Share2 size={40} className="mb-4" style={{ color: 'var(--text-secondary)' }} />
             <p className="mb-2 text-sm" style={{ color: 'var(--text-secondary)' }}>暂无分享记录</p>
             <p className="mb-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
-              点击"生成新分享"为社交平台创建精彩文案
+              点击&quot;生成新分享&quot;为社交平台创建精彩文案
             </p>
             <button
               onClick={handleOpenModal}
@@ -463,6 +632,31 @@ export default function ShareHistoryPage() {
                 style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
                 {detailShare.content}
+              </div>
+
+              <div className="mb-5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <ImageIcon size={12} />
+                    HTML 海报预览
+                  </div>
+                  <button
+                    onClick={() => handleExportPoster(detailShare)}
+                    disabled={posterExporting}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-60"
+                    style={{ background: 'var(--accent)', color: '#000' }}
+                  >
+                    {posterExporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                    下载 PNG
+                  </button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border p-2" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                  <div className="origin-top-left" style={{ transform: 'scale(0.42)', transformOrigin: 'top left', width: 760, height: 1080, marginBottom: -626 }}>
+                    <div ref={posterRef}>
+                      <SharePoster share={detailShare} />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* AI images */}

@@ -113,23 +113,32 @@ export async function fetchAllFeeds(): Promise<void> {
   }
 }
 
+function isLikelyChinese(text: string) {
+  const cleaned = (text || '').replace(/\s/g, '');
+  if (!cleaned) return false;
+  const zhCount = (cleaned.match(/[\u4e00-\u9fff]/g) || []).length;
+  return zhCount > cleaned.length * 0.3;
+}
+
 export async function translateUntranslatedArticles(limit = 50): Promise<number> {
-  const rows = await query<{ id: string; title: string; summary: string }>(
-    `SELECT a.id, a.title, a.summary FROM articles a
+  const rows = await query<{ id: string; title: string; summary: string; title_zh: string | null; summary_zh: string | null }>(
+    `SELECT a.id, a.title, a.summary, a.title_zh, a.summary_zh FROM articles a
      INNER JOIN feeds f ON a.feed_id = f.id
-     WHERE (a.title_zh IS NULL OR a.title_zh = '')
+     WHERE (a.title_zh IS NULL OR a.title_zh = '' OR (a.title_zh = a.title AND a.title !~ '[一-龥]'))
      ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC
      LIMIT $1`, [limit]
   );
   if (rows.length === 0) return 0;
 
-  const isLikelyChinese = (text: string) => {
-    const zhCount = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-    return zhCount > text.length * 0.3;
-  };
+  const candidates = rows.filter((r) => {
+    const titleZh = (r.title_zh || '').trim();
+    if (!titleZh) return true;
+    return titleZh === r.title && !isLikelyChinese(r.title);
+  });
+  if (candidates.length === 0) return 0;
 
-  const needsTranslation = rows.filter(r => !isLikelyChinese(r.title));
-  const alreadyChinese = rows.filter(r => isLikelyChinese(r.title));
+  const needsTranslation = candidates.filter(r => !isLikelyChinese(r.title));
+  const alreadyChinese = candidates.filter(r => isLikelyChinese(r.title));
 
   for (const item of alreadyChinese) {
     await execute('UPDATE articles SET title_zh = $1, summary_zh = $2 WHERE id = $3', [item.title, item.summary, item.id]);
@@ -141,11 +150,27 @@ export async function translateUntranslatedArticles(limit = 50): Promise<number>
 
   await withTransaction(async (client) => {
     for (const item of translated) {
+      const original = needsTranslation.find((row) => row.id === item.id);
+      if (!original) continue;
+
+      const translatedText = `${item.title_zh || ''}\n${item.summary_zh || ''}`;
+      const changed = item.title_zh !== original.title || item.summary_zh !== original.summary;
+      if (!changed && !isLikelyChinese(translatedText)) {
+        continue;
+      }
+
       await client.query('UPDATE articles SET title_zh = $1, summary_zh = $2 WHERE id = $3', [item.title_zh, item.summary_zh, item.id]);
     }
   });
 
-  return alreadyChinese.length + translated.length;
+  const successfulTranslations = translated.filter((item) => {
+    const original = needsTranslation.find((row) => row.id === item.id);
+    if (!original) return false;
+    const translatedText = `${item.title_zh || ''}\n${item.summary_zh || ''}`;
+    return item.title_zh !== original.title || item.summary_zh !== original.summary || isLikelyChinese(translatedText);
+  }).length;
+
+  return alreadyChinese.length + successfulTranslations;
 }
 
 export async function classifyUnclassifiedArticles(limit = 30): Promise<number> {
@@ -238,10 +263,12 @@ export async function runFullIngest(options?: {
     console.error('[Pipeline] classifyUnclassifiedArticles failed:', e);
   }
 
-  try {
-    result.audio_synthesized = await synthesizePendingAudio(audioLimit);
-  } catch (e) {
-    console.error('[Pipeline] synthesizePendingAudio failed:', e);
+  if (audioLimit > 0) {
+    try {
+      result.audio_synthesized = await synthesizePendingAudio(audioLimit);
+    } catch (e) {
+      console.error('[Pipeline] synthesizePendingAudio failed:', e);
+    }
   }
 
   console.log('[Pipeline] runFullIngest done:', result);

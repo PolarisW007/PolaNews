@@ -3,14 +3,12 @@ import { query, queryOne } from '@/lib/db/schema';
 import { parseJsonField, ARTICLE_JOIN } from '@/lib/db/helpers';
 
 const SUMMARY_MAX_LEN = 300;
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store' };
 
 function truncate(s: string | undefined | null, max: number): string {
   if (!s) return '';
   return s.length > max ? s.slice(0, max) + '…' : s;
 }
-
-const listCache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_TTL = 60_000;
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,15 +23,6 @@ export async function GET(req: NextRequest) {
     const region = searchParams.get('region') || undefined;
     const date_from = searchParams.get('date_from') || undefined;
     const date_to = searchParams.get('date_to') || undefined;
-
-    const cacheKey = `${page}:${limit}:${category||''}:${importance||''}:${search||''}:${feed_id||''}:${sentiment||''}:${region||''}:${date_from||''}:${date_to||''}`;
-    const cached = listCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return NextResponse.json(
-        { success: true, data: cached.data },
-        { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' } },
-      );
-    }
 
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -114,15 +103,9 @@ export async function GET(req: NextRequest) {
 
     const responseData = { articles, total, page, limit };
 
-    listCache.set(cacheKey, { data: responseData, ts: Date.now() });
-    if (listCache.size > 200) {
-      const oldest = [...listCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
-      for (let i = 0; i < 50; i++) listCache.delete(oldest[i][0]);
-    }
-
     return NextResponse.json(
       { success: true, data: responseData },
-      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' } },
+      { headers: NO_STORE_HEADERS },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';
