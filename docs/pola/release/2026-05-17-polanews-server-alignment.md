@@ -40,6 +40,17 @@ Align local and server environments, keep code synchronized through git, deploy 
 7. Reload supervisor and nginx.
 8. Verify health endpoints and browser-visible pages.
 
+## Deployment Result
+
+- Status: deployed
+- Deployed server root: `/opt/polanews`
+- Deployed service name: `polanews`
+- Deployed commit: `d28411c`
+- Backup directory: `/opt/backups/polanews-20260517001731`
+- Old root preserved: `/opt/WSYWorldOverview`
+- External health check: `http://aipd.me/polanews` returned `HTTP/1.1 200 OK`
+- API health check: `http://aipd.me/polanews/api/articles` returned JSON success with article data
+
 ## Rollback
 
 - Restore old supervisor config from backup and reread/update supervisor.
