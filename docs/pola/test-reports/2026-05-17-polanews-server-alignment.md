@@ -2,7 +2,9 @@
 
 ## Summary
 
-Production was migrated from the old `WSYWorldOverview/worldoverview` naming to `polanews` and deployed from git commit `d28411c`.
+Production was migrated from the old `WSYWorldOverview/worldoverview` naming to `polanews` and deployed from git commit `644f89e`.
+
+Follow-up regression on 2026-05-17 01:00 CST found the production page was failing to hydrate because nginx served `/_next/static/*` from the standalone directory. The app was built in place on the server, so the real static assets live in `/opt/polanews/app/.next/static/`. Updating the nginx aliases restored JS/CSS loading.
 
 ## Environment Evidence
 
@@ -29,6 +31,11 @@ Production was migrated from the old `WSYWorldOverview/worldoverview` naming to 
 | `curl -I http://aipd.me/polanews` | `HTTP/1.1 200 OK` |
 | `curl http://aipd.me/polanews/api/articles` | JSON success with article data |
 | Server source markers | Latest feature markers present |
+| `curl -I http://aipd.me/polanews/_next/static/chunks/0910b3c6896b5ba3.js` | `HTTP/1.1 200 OK` |
+| Browser home page hydration | Pass, 20 article cards visible and translated |
+| Browser infinite scroll | Pass, article cards increased from 20 to 40 |
+| Browser digest poster page | Pass, `Digest 图片海报` and `下载 PNG` visible |
+| Browser share detail poster | Pass, share detail exposes image/download area |
 
 ## Feature Marker Evidence
 
@@ -43,7 +50,26 @@ Verified on `/opt/polanews`:
 
 ## Browser Verification Notes
 
-The in-app browser reached `http://aipd.me/polanews`, `http://aipd.me/polanews/digest/2026-05-15`, and `http://aipd.me/polanews/share` without console errors. The browser automation snapshot did not reliably expose the hydrated article cards, so HTTP/API checks were used as the authoritative production health signal for article data.
+The in-app browser reached `http://aipd.me/polanews`, `http://aipd.me/polanews/digest/2026-05-15`, and `http://aipd.me/polanews/share` without console errors.
+
+Evidence after the nginx alias fix:
+
+- Home page rendered 20 hydrated article cards, including translated Chinese title `一款真正让我挺直腰背的离线桌面小工具`.
+- Infinite scroll loaded the next page and increased article links from 20 to 40.
+- Digest detail rendered `Digest 图片海报` and `下载 PNG`.
+- Share history opened; selecting a share item exposed the detailed Chinese share content and image/download area.
+
+## Static Asset Regression
+
+- Symptom: production HTML returned 200, APIs returned success, but the page appeared broken because client JS/CSS chunks were 404.
+- Root cause: nginx alias for `/polanews/_next/static/` pointed to `/opt/polanews/app/.next/standalone/.next/static/`, while the direct server build outputs assets to `/opt/polanews/app/.next/static/`.
+- Fix applied on server: both `/etc/nginx/conf.d/polazj.conf` and `/etc/nginx/sites-enabled/aicoacher` now alias `/polanews/_next/static/` to `/opt/polanews/app/.next/static/`; `nginx -t` passed and nginx was reloaded.
+- Post-fix log check: no new `/polanews/_next/static` nginx errors after 2026-05-17 01:00 CST.
+
+## Local Quality Gate
+
+- `npx tsc --noEmit`: Pass.
+- `npm run lint`: Fail on existing lint debt outside the static asset fix path, including unescaped quotes in `broadcast/page.tsx` and `digest/page.tsx`, React hook rule violations in category/search/saved/starred/header pages, and `prefer-const` in `src/lib/ai/llm.ts`.
 
 ## Backup And Rollback
 
@@ -55,3 +81,4 @@ The in-app browser reached `http://aipd.me/polanews`, `http://aipd.me/polanews/d
 
 - npm audit reports existing dependency vulnerabilities. They were not auto-fixed during production deployment to avoid unplanned breaking upgrades.
 - Old `/opt/WSYWorldOverview` remains on disk as rollback material and can be removed after a stable observation window.
+- The nginx static alias is an infrastructure config fix, not a repository code change. Future deployment automation should preserve `/opt/polanews/app/.next/static/` for direct server builds or explicitly copy `.next/static` into `.next/standalone/.next/static/`.
