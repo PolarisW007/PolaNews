@@ -45,7 +45,7 @@ export async function POST(
     }
 
     const rawText = article.title_zh
-      ? `${article.title_zh}。${article.summary_zh || article.ai_summary || article.summary || ''}`
+      ? `${article.title_zh}。${article.ai_summary || article.summary_zh || article.summary || ''}`
       : article.ai_summary || article.summary ||
         (article.full_content || article.content || '').replace(/<[^>]*>/g, '') ||
         article.title;

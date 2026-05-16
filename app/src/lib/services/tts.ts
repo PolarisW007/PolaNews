@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from 'fs';
-import { writeFile, readFile } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { execute, query, queryOne } from '../db/schema';
@@ -182,7 +182,7 @@ export async function generateBroadcastAudio(broadcastId: string): Promise<boole
 
 /**
  * 为已翻译但没有语音的最新文章预合成中文语音并持久化 audio_url。
- * 优先使用 title_zh + summary_zh / ai_summary，回退到原文标题+摘要。
+ * 优先使用 title_zh + ai_summary / summary_zh，回退到原文标题+摘要。
  * 失败时不抛错，仅跳过该条；返回成功合成的数量。
  */
 export async function synthesizePendingAudio(
@@ -211,7 +211,7 @@ export async function synthesizePendingAudio(
   let synthesized = 0;
   for (const row of rows) {
     const title = (row.title_zh || row.title || '').trim();
-    const body = (row.summary_zh || row.ai_summary || row.summary || '').trim();
+    const body = (row.ai_summary || row.summary_zh || row.summary || '').trim();
     const text = (title && body ? `${title}。${body}` : title || body).slice(0, 500);
     if (!text) continue;
 

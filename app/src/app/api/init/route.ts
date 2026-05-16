@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne, initializeDatabase } from '@/lib/db/schema';
 import { seedPresetFeeds } from '@/lib/rss/presets';
-import { fetchAllFeeds } from '@/lib/rss/engine';
+import { runFullIngest } from '@/lib/rss/engine';
 
 export async function POST() {
   try {
@@ -32,7 +32,7 @@ export async function GET() {
     await initializeDatabase();
     await seedPresetFeeds();
 
-    await fetchAllFeeds();
+    const pipelineResult = await runFullIngest();
 
     const feedCount = await queryOne('SELECT COUNT(*) as count FROM feeds') as { count: number | string };
     const articleCount = await queryOne('SELECT COUNT(*) as count FROM articles') as { count: number | string };
@@ -43,6 +43,9 @@ export async function GET() {
         message: '初始化并抓取完成',
         feeds: Number(feedCount.count),
         articles: Number(articleCount.count),
+        translated: pipelineResult.translated,
+        summarized: pipelineResult.summarized,
+        audio_synthesized: pipelineResult.audio_synthesized,
       },
     });
   } catch (error) {

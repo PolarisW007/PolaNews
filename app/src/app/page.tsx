@@ -638,7 +638,7 @@ export default function HomePage() {
       setFetchProgress(100);
 
       if (json.success) {
-        setFetchMsg(`✓ 抓取完成！${json.data.feeds_count} 个源，新增 ${json.data.articles_count} 篇文章`);
+        setFetchMsg(`✓ 抓取完成！${json.data.feeds_count} 个源，翻译 ${json.data.translated ?? 0}，摘要 ${json.data.summarized ?? 0}，语音 ${json.data.audio_synthesized ?? 0}`);
         clearArticleCache();
         setPage(1);
         await fetchArticles(activeCategory, 1, false, { bypassCache: true });

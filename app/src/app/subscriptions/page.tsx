@@ -57,7 +57,7 @@ export default function SubscriptionsPage() {
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-  /** 立即抓取：触发完整管道（fetch → translate → classify → TTS），后台异步跑 */
+  /** 立即抓取：触发完整管道（fetch → translate → summary → classify → TTS），后台异步跑 */
   const handleFetchAll = async () => {
     if (fetching) return;
     setFetching(true);
@@ -70,7 +70,7 @@ export default function SubscriptionsPage() {
       if (json.success) {
         const counters = json.data || {};
         toast(
-          `抓取完成：新增 ${counters.articles_count ?? 0} 篇，翻译 ${counters.newly_translated ?? 0}，合成语音 ${counters.newly_voiced ?? 0}`,
+          `抓取完成：共 ${counters.articles_count ?? 0} 篇，翻译 ${counters.newly_translated ?? counters.translated ?? 0}，摘要 ${counters.newly_summarized ?? counters.summarized ?? 0}，合成语音 ${counters.newly_voiced ?? counters.audio_synthesized ?? 0}`,
           'success'
         );
         loadFeeds();

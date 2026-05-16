@@ -28,9 +28,9 @@ export async function POST(
     }
 
     const article = await queryOne(
-      'SELECT id, title, content, summary, full_content FROM articles WHERE id = $1',
+      'SELECT id, title, title_zh, content, summary, summary_zh, full_content FROM articles WHERE id = $1',
       [id]
-    ) as { id: string; title: string; content: string; summary: string; full_content: string } | null;
+    ) as { id: string; title: string; title_zh: string; content: string; summary: string; summary_zh: string; full_content: string } | null;
 
     if (!article) {
       return NextResponse.json(
@@ -39,7 +39,7 @@ export async function POST(
       );
     }
 
-    const sourceText = (article.full_content || article.content || article.summary || '')
+    const sourceText = (article.full_content || article.content || article.summary_zh || article.summary || '')
       .replace(/<[^>]*>/g, '')
       .replace(/Article URL:.*?\n/g, '')
       .replace(/Comments URL:.*?\n/g, '')
@@ -49,7 +49,7 @@ export async function POST(
       .slice(0, 6000);
 
     const { summary, key_points } = await summarizeArticle(
-      article.title,
+      lang === 'zh' ? (article.title_zh || article.title) : article.title,
       sourceText || article.title,
       lang
     );

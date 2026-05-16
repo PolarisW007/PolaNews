@@ -22,7 +22,6 @@ import {
   Globe,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import clsx from 'clsx';
 import sanitizeHtml from 'sanitize-html';
 import { api } from '@/lib/api-client';
 import type { Article } from '@/lib/types';
@@ -82,14 +81,10 @@ async function prefetchArticle(id: string) {
   }
 }
 
-/** 检测内容是否为 HN/Reddit 类纯元数据型正文 */
-function isMetadataOnlyContent(content: string): boolean {
-  const clean = content.replace(/<[^>]*>/g, '').trim();
-  if (clean.length > 300) return false;
-  return (
-    (clean.includes('Article URL:') || clean.includes('Comments URL:') || clean.includes('Points:')) &&
-    clean.split('\n').filter((l) => l.trim()).length <= 6
-  );
+function getArticleSummary(article: Article, lang: 'zh' | 'en' | 'ja'): string {
+  if (lang === 'en') return article.ai_summary_en || article.summary || article.summary_zh || '';
+  if (lang === 'ja') return article.ai_summary_ja || article.ai_summary || article.summary_zh || article.summary || '';
+  return article.ai_summary || article.summary_zh || article.summary || '';
 }
 
 export default function ArticlePage() {
@@ -176,7 +171,10 @@ export default function ArticlePage() {
       setStarred(!!art.is_starred);
       setSaved(!!art.is_saved);
       setArticleUrl(art.url || '');
-      api.articles.markRead(id).catch(() => {});
+      const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (authToken) {
+        api.articles.markRead(id).catch(() => {});
+      }
 
       // 若后端已持久化 audio_url，直接作为 preloadedAudioUrl 使用，跳过合成
       if (art.audio_url && !preloadedAudioUrl) {
@@ -209,7 +207,6 @@ export default function ArticlePage() {
 
       // 自动后台加载全文 + 自动中英对照
       setFulltextLoading(true);
-      const isMeta = isMetadataOnlyContent(art.content || '');
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -384,10 +381,7 @@ export default function ArticlePage() {
 
   useEffect(() => {
     if (!article) return;
-    const text =
-      summaryLang === 'en' ? article.ai_summary_en :
-      summaryLang === 'ja' ? article.ai_summary_ja :
-      article.ai_summary;
+    const text = getArticleSummary(article, summaryLang);
     if (!text) return;
     const persistedUrl =
       summaryLang === 'en' ? article.audio_url_en :
@@ -416,8 +410,8 @@ export default function ArticlePage() {
       return;
     }
 
-    const zhSummary = article?.ai_summary || '';
-    const text = zhSummary || article?.summary || article?.content?.replace(/<[^>]*>/g, '') || '';
+    const zhSummary = article ? getArticleSummary(article, 'zh') : '';
+    const text = zhSummary || article?.content?.replace(/<[^>]*>/g, '') || '';
     if (!text.trim()) { toast('没有可朗读的内容', 'info'); return; }
 
     // 优先使用预加载的音频
@@ -496,13 +490,7 @@ export default function ArticlePage() {
     }
   };
 
-  const currentSummary = article
-    ? summaryLang === 'en'
-      ? article.ai_summary_en
-      : summaryLang === 'ja'
-        ? article.ai_summary_ja
-        : article.ai_summary
-    : '';
+  const currentSummary = article ? getArticleSummary(article, summaryLang) : '';
 
   const handleSummarize = async () => {
     if (!article) return;

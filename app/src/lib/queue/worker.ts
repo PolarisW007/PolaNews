@@ -34,10 +34,16 @@ export function startWorkers(): void {
   const conn = getConnection();
 
   new Worker('feed-fetch', async () => {
-    const { fetchAllFeeds, translateUntranslatedArticles, classifyUnclassifiedArticles } = await import('../rss/engine');
+    const {
+      fetchAllFeeds,
+      translateUntranslatedArticles,
+      summarizeMissingChineseArticles,
+      classifyUnclassifiedArticles,
+    } = await import('../rss/engine');
     console.log('[Worker] Fetching feeds...');
     await fetchAllFeeds();
     await translateUntranslatedArticles(50).catch(e => console.error('[Worker] Translation error:', e));
+    await summarizeMissingChineseArticles(30).catch(e => console.error('[Worker] Summary error:', e));
     await classifyUnclassifiedArticles(30).catch(e => console.error('[Worker] Classification error:', e));
   }, { connection: conn, concurrency: 1 });
 

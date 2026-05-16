@@ -13,7 +13,6 @@ import {
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
 import BroadcastPlayer from '@/components/ui/BroadcastPlayer';
-import { api } from '@/lib/api-client';
 import { useToast } from '@/components/ui/Toast';
 
 interface Segment {
@@ -34,6 +33,13 @@ interface Broadcast {
   voice_id: string;
   status: string;
   created_at: string;
+}
+
+function resolveAudioUrl(url: string, basePath: string): string {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  if (basePath && url.startsWith(`${basePath}/`)) return url;
+  return `${basePath}${url}`;
 }
 
 export default function BroadcastDetailPage() {
@@ -100,7 +106,7 @@ export default function BroadcastDetailPage() {
     toPreload.forEach((seg) => {
       if (seg.audio_url) {
         // 已有音频 URL，直接预加载
-        const audio = new Audio(`${basePath}${seg.audio_url}`);
+        const audio = new Audio(resolveAudioUrl(seg.audio_url, basePath));
         audio.preload = 'auto';
         preloadRefs.current.push(audio);
       } else if (seg.text) {
@@ -113,7 +119,7 @@ export default function BroadcastDetailPage() {
           .then(r => r.json())
           .then(d => {
             if (d.success && d.data?.url) {
-              const audio = new Audio(`${basePath}${d.data.url}`);
+              const audio = new Audio(resolveAudioUrl(d.data.url, basePath));
               audio.preload = 'auto';
               preloadRefs.current.push(audio);
             }
@@ -132,6 +138,16 @@ export default function BroadcastDetailPage() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const formatDateOnly = (value: string) => {
+    if (!value) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    try {
+      return format(new Date(value), 'yyyy-MM-dd');
+    } catch {
+      return value;
+    }
   };
 
   const langLabels: Record<string, string> = { zh: '中文', en: 'English', ja: '日本語' };
@@ -184,7 +200,7 @@ export default function BroadcastDetailPage() {
         {/* Header */}
         <div className="mb-4 sm:mb-6">
           <h1 className="text-xl sm:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {broadcast.broadcast_date} 新闻播报
+            {formatDateOnly(broadcast.broadcast_date)} 新闻播报
           </h1>
           <div
             className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm"
@@ -272,7 +288,8 @@ export default function BroadcastDetailPage() {
         <BroadcastPlayer
           script={broadcast.script}
           segments={segments}
-          title={`${broadcast.broadcast_date} 新闻播报`}
+          title={`${formatDateOnly(broadcast.broadcast_date)} 新闻播报`}
+          voiceId={broadcast.voice_id || 'longshu_v3'}
           onSegmentChange={(index) => {
             setActiveSegmentIndex(index);
             const el = document.getElementById(`segment-${index}`);

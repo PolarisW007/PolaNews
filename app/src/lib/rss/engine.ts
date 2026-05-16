@@ -1,7 +1,7 @@
 import Parser from 'rss-parser';
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute, withTransaction } from '../db/schema';
-import { translateArticleBatch, classifyArticle } from '../ai/llm';
+import { translateArticleBatch, classifyArticle, summarizeArticle } from '../ai/llm';
 import { synthesizePendingAudio } from '../services/tts';
 
 const parser = new Parser();
@@ -211,32 +211,115 @@ export async function classifyUnclassifiedArticles(limit = 30): Promise<number> 
   return classified;
 }
 
+function cleanSummarySource(text: string): string {
+  return (text || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/Article URL:.*?(?:\n|$)/gi, '')
+    .replace(/Comments URL:.*?(?:\n|$)/gi, '')
+    .replace(/Points:\s*\d+\n?/gi, '')
+    .replace(/# Comments:\s*\d+\n?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 为抓取后的文章默认生成中文 AI 摘要，并持久化到 articles.ai_summary。
+ * 这是详情页懒生成的后台化版本，保证首页/详情/语音播报读取同一份中文摘要。
+ */
+export async function summarizeMissingChineseArticles(limit = 30): Promise<number> {
+  const rows = await query<{
+    id: string;
+    title: string;
+    title_zh: string;
+    summary: string;
+    summary_zh: string;
+    content: string;
+    full_content: string;
+  }>(
+    `SELECT id, title, title_zh, summary, summary_zh, content, full_content
+     FROM articles
+     WHERE (ai_summary IS NULL OR ai_summary = '')
+       AND (
+         (title_zh IS NOT NULL AND title_zh <> '')
+         OR (summary_zh IS NOT NULL AND summary_zh <> '')
+       )
+     ORDER BY published_at DESC NULLS LAST, created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  if (rows.length === 0) return 0;
+
+  let summarized = 0;
+  const CONCURRENCY = 3;
+
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(async (row) => {
+        const title = (row.title_zh || row.title || '').trim();
+        const source = cleanSummarySource(
+          row.full_content || row.content || row.summary_zh || row.summary || title
+        ).slice(0, 6000);
+        if (!title && !source) return null;
+
+        const result = await summarizeArticle(title || row.title, source || title, 'zh');
+        const summary = (result.summary || '').trim();
+        if (!summary || !isLikelyChinese(summary)) return null;
+
+        return {
+          id: row.id,
+          summary,
+          key_points: Array.isArray(result.key_points) ? result.key_points : [],
+        };
+      })
+    );
+
+    await withTransaction(async (client) => {
+      for (const settled of results) {
+        if (settled.status !== 'fulfilled' || !settled.value) continue;
+        await client.query(
+          'UPDATE articles SET ai_summary = $1, ai_key_points = $2 WHERE id = $3',
+          [settled.value.summary, JSON.stringify(settled.value.key_points), settled.value.id]
+        );
+        summarized++;
+      }
+    });
+  }
+
+  return summarized;
+}
+
 export interface IngestResult {
   fetched: boolean;
   translated: number;
+  summarized: number;
   classified: number;
   audio_synthesized: number;
   error?: string;
 }
 
 /**
- * 全量增量处理管道：抓取 RSS → 翻译新文章 → 分类 → 合成中文语音。
+ * 全量增量处理管道：抓取 RSS → 翻译新文章 → 生成中文 AI 摘要 → 分类 → 合成中文语音。
  * 用于 scheduler（每 2 小时）与 /api/feeds/fetch 手动触发，保持行为一致。
  * 任一子步骤失败仅记录日志，不中断后续步骤。
  */
 export async function runFullIngest(options?: {
   translateLimit?: number;
+  summaryLimit?: number;
   classifyLimit?: number;
   audioLimit?: number;
   skipFetch?: boolean;
 }): Promise<IngestResult> {
   const translateLimit = options?.translateLimit ?? 100;
+  const summaryLimit = options?.summaryLimit ?? 40;
   const classifyLimit = options?.classifyLimit ?? 60;
   const audioLimit = options?.audioLimit ?? 30;
 
   const result: IngestResult = {
     fetched: false,
     translated: 0,
+    summarized: 0,
     classified: 0,
     audio_synthesized: 0,
   };
@@ -255,6 +338,12 @@ export async function runFullIngest(options?: {
     result.translated = await translateUntranslatedArticles(translateLimit);
   } catch (e) {
     console.error('[Pipeline] translateUntranslatedArticles failed:', e);
+  }
+
+  try {
+    result.summarized = await summarizeMissingChineseArticles(summaryLimit);
+  } catch (e) {
+    console.error('[Pipeline] summarizeMissingChineseArticles failed:', e);
   }
 
   try {

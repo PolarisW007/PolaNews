@@ -138,6 +138,8 @@ export async function initializeDatabase(): Promise<void> {
   // 中文语音 URL（由 scheduler / manual fetch 预合成并持久化）
   await execute(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS audio_url TEXT DEFAULT ''`);
   await execute(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS audio_voice VARCHAR(50) DEFAULT ''`);
+  await execute(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS ai_key_points_en JSONB DEFAULT '[]'`);
+  await execute(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS ai_key_points_ja JSONB DEFAULT '[]'`);
   // 英/日语音 URL（详情页切换语言时按需合成并持久化，避免切换文章重复合成）
   await execute(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS audio_url_en TEXT DEFAULT ''`);
   await execute(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS audio_url_ja TEXT DEFAULT ''`);

@@ -14,6 +14,7 @@ interface BroadcastPlayerProps {
   script: string;
   segments: Segment[];
   title: string;
+  voiceId?: string;
   onSegmentChange?: (index: number) => void;
   onClose?: () => void;
 }
@@ -21,14 +22,21 @@ interface BroadcastPlayerProps {
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-export default function BroadcastPlayer({ segments, title, onSegmentChange, onClose }: BroadcastPlayerProps) {
+function resolveAudioUrl(url: string): string {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  if (basePath && url.startsWith(`${basePath}/`)) return url;
+  return `${basePath}${url}`;
+}
+
+export default function BroadcastPlayer({ segments, title, voiceId = 'longshu_v3', onSegmentChange, onClose }: BroadcastPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSegment, setCurrentSegment] = useState(0);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const [volume, setVolume] = useState(1);
+  const [volume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,9 +44,6 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const totalSegments = segments.length || 1;
-
-  const currentSeg = segments[currentSegment];
-  const hasAudioUrl = !!currentSeg?.audio_url;
 
   const destroyAudio = useCallback(() => {
     if (audioRef.current) {
@@ -59,7 +64,7 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
       const res = await fetch(`${basePath}/api/tts/synthesize`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ text: text.slice(0, 5000), voice: 'longshu_v3' }),
+        body: JSON.stringify({ text: text.slice(0, 5000), voice: voiceId }),
       });
       const data = await res.json();
       if (data.success && data.data?.url) {
@@ -71,14 +76,14 @@ export default function BroadcastPlayer({ segments, title, onSegmentChange, onCl
       setSynthLoading(false);
     }
     return null;
-  }, []);
+  }, [voiceId]);
 
   const playSegment = useCallback(async (segIndex: number) => {
     destroyAudio();
     const seg = segments[segIndex];
     if (!seg) return;
 
-    let audioUrl = seg.audio_url ? `${basePath}${seg.audio_url}` : null;
+    let audioUrl = seg.audio_url ? resolveAudioUrl(seg.audio_url) : null;
 
     if (!audioUrl && seg.text) {
       audioUrl = await synthesizeOnDemand(seg.text);

@@ -4,6 +4,98 @@ import { queryOne, execute } from '@/lib/db/schema';
 import { callLLM } from '@/lib/ai/llm';
 import { generateBroadcastAudio } from '@/lib/services/tts';
 
+type DigestHeadline = {
+  title?: string;
+  summary?: string;
+  category?: string;
+  importance?: string;
+};
+
+type DigestCategorySummaries = Record<string, {
+  count?: number;
+  items?: Array<{ title?: string; summary?: string }>;
+}>;
+
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value as T;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+function isLikelyChinese(text: string): boolean {
+  const compact = (text || '').replace(/\s/g, '');
+  if (!compact) return false;
+  const count = (compact.match(/[\u4e00-\u9fff]/g) || []).length;
+  return count >= Math.min(12, compact.length * 0.2);
+}
+
+function cleanBroadcastText(text: string): string {
+  return (text || '')
+    .replace(/\*\*/g, '')
+    .replace(/#+\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildFallbackScript(digest: Record<string, unknown>): string {
+  const title = cleanBroadcastText(String(digest.title || '每日新闻播报'));
+  const headlines = parseJsonField<DigestHeadline[]>(digest.headlines, []);
+  const categorySummaries = parseJsonField<DigestCategorySummaries>(digest.category_summaries, {});
+  const lines: string[] = [
+    `[段落1] 各位听众朋友大家好，欢迎收听一念三千全球资讯播报。今天为你梳理 ${digest.digest_date || ''} 的重点新闻。`,
+  ];
+
+  headlines.slice(0, 3).forEach((item, idx) => {
+    const itemTitle = cleanBroadcastText(item.title || `第 ${idx + 1} 条头条`);
+    const summary = cleanBroadcastText(item.summary || '');
+    lines.push(`[段落${idx + 2}] 第 ${idx + 1} 条，${itemTitle}。${summary.slice(0, 180)}`);
+  });
+
+  const categoryParts = Object.entries(categorySummaries)
+    .slice(0, 4)
+    .map(([category, group]) => {
+      const first = group.items?.[0];
+      const titleText = cleanBroadcastText(first?.title || '');
+      return `${category} 方向共 ${group.count || group.items?.length || 0} 条，重点关注 ${titleText || '相关动态'}`;
+    })
+    .filter(Boolean);
+  if (categoryParts.length > 0) {
+    lines.push(`[段落${lines.length + 1}] 分类快讯方面，${categoryParts.join('；')}。`);
+  }
+
+  lines.push(`[段落${lines.length + 1}] 以上就是本次一念三千全球资讯播报。更多详情可以在每日 Digest 中继续阅读，我们下次再见。`);
+  return lines.join('\n\n') || `[段落1] ${title}`;
+}
+
+function parseBroadcastSegments(script: string): { index: number; text: string }[] {
+  const segments: { index: number; text: string }[] = [];
+  const regex = /\[段落\s*(\d+)\]\s*([\s\S]*?)(?=\n?\s*\[段落\s*\d+\]|\s*$)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(script)) !== null) {
+    const index = Number(match[1]);
+    const text = cleanBroadcastText(match[2] || '');
+    if (Number.isFinite(index) && text.length > 3) {
+      segments.push({ index, text });
+    }
+  }
+
+  if (segments.length > 0) return segments;
+
+  return script
+    .split(/\n{2,}|(?<=。)\s+/)
+    .map(cleanBroadcastText)
+    .filter((text) => text.length > 8)
+    .map((text, idx) => ({ index: idx + 1, text }));
+}
+
 export async function POST(req: NextRequest) {
   try {
     let lang = 'zh';
@@ -29,41 +121,32 @@ export async function POST(req: NextRequest) {
     }
 
     const fullContent = (digest.full_content as string) || '';
+    const fallbackScript = buildFallbackScript(digest);
 
-    const systemPrompt = `你是一位专业的新闻主播。请将以下新闻摘要改写为口语化的播报稿。
+    const systemPrompt = `你是一位专业的中文新闻主播。请将以下新闻摘要改写为口语化的中文播报稿。
 
 要求：
 1. 开场白问候（例："各位听众朋友大家好，欢迎收听一念三千全球资讯播报。"）
 2. 头条播报：3条最重要新闻，每条含标题朗读和100字以内AI摘要
 3. 分类快讯：按分类播报要点
 4. 结尾祝语
+5. 必须全程使用简体中文，不要输出英文播报稿
 
 格式要求：用 [段落1] [段落2] ... 标记每个段落，每段100-300字。`;
 
-    const digestPreview = fullContent.slice(0, 6000);
-    const script = await callLLM(digestPreview, systemPrompt);
+    const digestPreview = [
+      `标题：${digest.title || ''}`,
+      `日期：${digest.digest_date || ''}`,
+      fallbackScript,
+      fullContent.slice(0, 5000),
+    ].join('\n\n');
 
-    const segmentRegex = /\[段落(\d+)\]\s*/g;
-    const parts = script.split(segmentRegex).filter(Boolean);
-    const segments: { index: number; text: string }[] = [];
+    let script = await callLLM(digestPreview, systemPrompt);
+    let segments = parseBroadcastSegments(script);
 
-    for (let i = 0; i < parts.length; i += 2) {
-      const idx = parseInt(parts[i], 10);
-      const text = (parts[i + 1] || '').trim();
-      if (text && !isNaN(idx)) {
-        segments.push({ index: idx, text });
-      }
-    }
-
-    if (segments.length === 0 && script.trim()) {
-      const lines = script.split('\n\n').filter(l => l.trim().length > 10);
-      lines.forEach((text, i) => {
-        segments.push({ index: i + 1, text: text.trim() });
-      });
-    }
-
-    if (segments.length === 0) {
-      segments.push({ index: 1, text: script.trim() || '暂无播报内容' });
+    if (!isLikelyChinese(script) || segments.length === 0) {
+      script = fallbackScript;
+      segments = parseBroadcastSegments(script);
     }
 
     const estimatedDuration = script.length * 120;
