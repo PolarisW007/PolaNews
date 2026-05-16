@@ -1,0 +1,6 @@
+name: pola-news
+channels:
+  - conda-forge
+dependencies:
+  - nodejs=22.22.2
+  - python=3.11
