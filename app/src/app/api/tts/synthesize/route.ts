@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { synthesizeAudio } from '@/lib/services/tts';
+import { hashSpeechText, synthesizeAudio } from '@/lib/services/tts';
 import { queryOne, execute } from '@/lib/db/schema';
 
 const AUDIO_DIR = join(process.cwd(), 'data', 'audio');
@@ -10,6 +10,12 @@ function audioColFor(lang: string): 'audio_url' | 'audio_url_en' | 'audio_url_ja
   if (lang === 'en') return 'audio_url_en';
   if (lang === 'ja') return 'audio_url_ja';
   return 'audio_url';
+}
+
+function audioHashColFor(lang: string): 'audio_text_hash' | 'audio_text_hash_en' | 'audio_text_hash_ja' {
+  if (lang === 'en') return 'audio_text_hash_en';
+  if (lang === 'ja') return 'audio_text_hash_ja';
+  return 'audio_text_hash';
 }
 
 function fileFromUrl(url: string): string | null {
@@ -44,21 +50,23 @@ export async function POST(req: NextRequest) {
 
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
     const col = audioColFor(lang);
+    const hashCol = audioHashColFor(lang);
+    const textHash = hashSpeechText(text.trim());
 
     // 若带 articleId，优先命中数据库已持久化的音频
     if (articleId) {
       try {
         const row = await queryOne(
-          `SELECT ${col} AS url FROM articles WHERE id = $1`,
+          `SELECT ${col} AS url, ${hashCol} AS hash FROM articles WHERE id = $1`,
           [articleId]
-        ) as { url: string | null } | null;
+        ) as { url: string | null; hash: string | null } | null;
         const cachedUrl = row?.url || '';
-        if (cachedUrl) {
+        if (cachedUrl && row?.hash === textHash) {
           const fname = fileFromUrl(cachedUrl);
           if (fname && existsSync(join(AUDIO_DIR, fname))) {
             return NextResponse.json({
               success: true,
-              data: { url: cachedUrl, filename: fname, cached: true },
+              data: { url: cachedUrl, filename: fname, cached: true, text_hash: textHash },
             });
           }
         }
@@ -82,13 +90,13 @@ export async function POST(req: NextRequest) {
       try {
         if (col === 'audio_url') {
           await execute(
-            `UPDATE articles SET ${col} = $1, audio_voice = $2 WHERE id = $3`,
-            [url, voice, articleId]
+            `UPDATE articles SET ${col} = $1, audio_voice = $2, ${hashCol} = $3 WHERE id = $4`,
+            [url, voice, textHash, articleId]
           );
         } else {
           await execute(
-            `UPDATE articles SET ${col} = $1 WHERE id = $2`,
-            [url, articleId]
+            `UPDATE articles SET ${col} = $1, ${hashCol} = $2 WHERE id = $3`,
+            [url, textHash, articleId]
           );
         }
       } catch (e) {
@@ -98,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { url, filename: result.filename, cached: false },
+      data: { url, filename: result.filename, cached: false, text_hash: textHash },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '语音合成失败';

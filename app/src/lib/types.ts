@@ -12,7 +12,7 @@ export interface User {
 export interface UserPreferences {
   language: 'zh' | 'en' | 'ja';
   digest_language?: 'zh' | 'en' | 'ja';
-  theme: 'dark' | 'light' | 'system';
+  theme: 'dark' | 'light' | 'system' | 'zhenjing' | 'aurora' | 'amber';
   digest_time: string[];
   categories: string[];
 }
@@ -46,6 +46,8 @@ export interface Article {
   ai_key_points: string[];
   ai_summary_en: string;
   ai_summary_ja: string;
+  ai_key_points_en?: string[];
+  ai_key_points_ja?: string[];
   cover_image: string;
   published_at: string;
   categories: ArticleCategories;
@@ -66,6 +68,9 @@ export interface Article {
   audio_url?: string;
   audio_url_en?: string;
   audio_url_ja?: string;
+  audio_text_hash?: string;
+  audio_text_hash_en?: string;
+  audio_text_hash_ja?: string;
 }
 
 export interface ArticleCategories {

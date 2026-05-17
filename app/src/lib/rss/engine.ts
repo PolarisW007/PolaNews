@@ -279,7 +279,9 @@ export async function summarizeMissingChineseArticles(limit = 30): Promise<numbe
       for (const settled of results) {
         if (settled.status !== 'fulfilled' || !settled.value) continue;
         await client.query(
-          'UPDATE articles SET ai_summary = $1, ai_key_points = $2 WHERE id = $3',
+          `UPDATE articles
+           SET ai_summary = $1, ai_key_points = $2, audio_url = '', audio_text_hash = ''
+           WHERE id = $3`,
           [settled.value.summary, JSON.stringify(settled.value.key_points), settled.value.id]
         );
         summarized++;

@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import sanitizeHtml from 'sanitize-html';
 import { api } from '@/lib/api-client';
 import type { Article } from '@/lib/types';
+import { buildArticleSpeechText, getArticleSummaryForSpeech } from '@/lib/article-speech';
 import MainLayout from '@/components/layout/MainLayout';
 import { useToast } from '@/components/ui/Toast';
 
@@ -82,9 +83,7 @@ async function prefetchArticle(id: string) {
 }
 
 function getArticleSummary(article: Article, lang: 'zh' | 'en' | 'ja'): string {
-  if (lang === 'en') return article.ai_summary_en || article.summary || article.summary_zh || '';
-  if (lang === 'ja') return article.ai_summary_ja || article.ai_summary || article.summary_zh || article.summary || '';
-  return article.ai_summary || article.summary_zh || article.summary || '';
+  return getArticleSummaryForSpeech(article, lang);
 }
 
 export default function ArticlePage() {
@@ -121,6 +120,8 @@ export default function ArticlePage() {
   const speakingArticleIdRef = useRef<string | null>(null);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextArticleRef = useRef<NeighborInfo | null>(null);
+  const continueReadingRef = useRef(false);
+  const autoStartAfterLoadRef = useRef(false);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   const stopTTS = useCallback(() => {
@@ -142,7 +143,11 @@ export default function ArticlePage() {
     setTtsLoading(false);
   }, []);
 
-  const navigateToArticle = useCallback((articleId: string) => {
+  const navigateToArticle = useCallback((articleId: string, options?: { preserveReading?: boolean }) => {
+    if (!options?.preserveReading) {
+      continueReadingRef.current = false;
+      autoStartAfterLoadRef.current = false;
+    }
     stopTTS();
     router.push(`/article/${articleId}`);
   }, [router, stopTTS]);
@@ -156,7 +161,8 @@ export default function ArticlePage() {
     const next = nextArticleRef.current;
     if (next?.id) {
       autoAdvanceTimerRef.current = setTimeout(() => {
-        navigateToArticle(next.id);
+        autoStartAfterLoadRef.current = continueReadingRef.current;
+        navigateToArticle(next.id, { preserveReading: continueReadingRef.current });
       }, 250);
     }
   }, [navigateToArticle]);
@@ -395,7 +401,7 @@ export default function ArticlePage() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          text: text.slice(0, 800),
+          text,
           voice: 'longwan_v3',
           articleId: article?.id,
           lang: summaryLang,
@@ -408,9 +414,16 @@ export default function ArticlePage() {
         setArticle((prev) => {
           if (!prev) return prev;
           const patch: Partial<Article> = {};
-          if (summaryLang === 'en') patch.audio_url_en = data.data.url;
-          else if (summaryLang === 'ja') patch.audio_url_ja = data.data.url;
-          else patch.audio_url = data.data.url;
+          if (summaryLang === 'en') {
+            patch.audio_url_en = data.data.url;
+            patch.audio_text_hash_en = data.data.text_hash || '';
+          } else if (summaryLang === 'ja') {
+            patch.audio_url_ja = data.data.url;
+            patch.audio_text_hash_ja = data.data.text_hash || '';
+          } else {
+            patch.audio_url = data.data.url;
+            patch.audio_text_hash = data.data.text_hash || '';
+          }
           const next = { ...prev, ...patch };
           setCachedArticle(prev.id, next);
           return next;
@@ -425,14 +438,18 @@ export default function ArticlePage() {
 
   useEffect(() => {
     if (!article) return;
-    const text = getArticleSummary(article, summaryLang);
+    const text = buildArticleSpeechText(article, summaryLang, 1600);
     if (!text) return;
     const persistedUrl =
       summaryLang === 'en' ? article.audio_url_en :
       summaryLang === 'ja' ? article.audio_url_ja :
       article.audio_url;
+    const persistedHash =
+      summaryLang === 'en' ? article.audio_text_hash_en :
+      summaryLang === 'ja' ? article.audio_text_hash_ja :
+      article.audio_text_hash;
     // 命中持久化：直接挂上，跳过合成
-    if (persistedUrl) {
+    if (persistedUrl && persistedHash) {
       if (preloadedAudioUrl !== persistedUrl) setPreloadedAudioUrl(persistedUrl);
       ttsPreloadRef.current = true;
       return;
@@ -448,15 +465,23 @@ export default function ArticlePage() {
 
   const handleTTS = async () => {
     if (isSpeaking) {
+      continueReadingRef.current = false;
+      autoStartAfterLoadRef.current = false;
       stopTTS();
       return;
     }
 
     stopTTS();
+    continueReadingRef.current = true;
     const playingArticleId = article?.id || id;
-    const zhSummary = article ? getArticleSummary(article, 'zh') : '';
-    const text = zhSummary || article?.content?.replace(/<[^>]*>/g, '') || '';
-    if (!text.trim()) { toast('没有可朗读的内容', 'info'); return; }
+    const text = article
+      ? buildArticleSpeechText(article, 'zh', 1600)
+      : '';
+    if (!text.trim()) {
+      continueReadingRef.current = false;
+      toast('没有可朗读的内容', 'info');
+      return;
+    }
 
     // 优先使用预加载的音频
     if (preloadedAudioUrl) {
@@ -483,10 +508,21 @@ export default function ArticlePage() {
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`${basePath}/api/tts/synthesize`, {
         method: 'POST', headers,
-        body: JSON.stringify({ text: text.slice(0, 800), voice: 'longwan_v3' }),
+        body: JSON.stringify({ text, voice: 'longwan_v3', articleId: article?.id, lang: 'zh' }),
       });
       const data = await res.json();
       if (data.success && data.data?.url) {
+        setPreloadedAudioUrl(data.data.url);
+        setArticle((prev) => {
+          if (!prev) return prev;
+          const next = {
+            ...prev,
+            audio_url: data.data.url,
+            audio_text_hash: data.data.text_hash || prev.audio_text_hash || '',
+          };
+          setCachedArticle(prev.id, next);
+          return next;
+        });
         const audio = new Audio(data.data.url);
         audioRef.current = audio;
         speakingArticleIdRef.current = playingArticleId;
@@ -509,9 +545,19 @@ export default function ArticlePage() {
       setIsSpeaking(true);
       window.speechSynthesis.speak(utterance);
     } else {
+      continueReadingRef.current = false;
       toast('语音合成服务暂不可用', 'error');
     }
   };
+
+  useEffect(() => {
+    if (!article || !autoStartAfterLoadRef.current || ttsPreloading || ttsLoading || isSpeaking) return;
+    autoStartAfterLoadRef.current = false;
+    const timer = setTimeout(() => {
+      void handleTTS();
+    }, 180);
+    return () => clearTimeout(timer);
+  });
 
   const handleShare = async () => {
     if (!article) return;

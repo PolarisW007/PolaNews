@@ -56,8 +56,10 @@ export async function POST(
 
     const aiSummaryCol = lang === 'zh' ? 'ai_summary' : lang === 'en' ? 'ai_summary_en' : 'ai_summary_ja';
     const keyPointsCol = lang === 'zh' ? 'ai_key_points' : lang === 'en' ? 'ai_key_points_en' : 'ai_key_points_ja';
+    const audioCol = lang === 'zh' ? 'audio_url' : lang === 'en' ? 'audio_url_en' : 'audio_url_ja';
+    const audioHashCol = lang === 'zh' ? 'audio_text_hash' : lang === 'en' ? 'audio_text_hash_en' : 'audio_text_hash_ja';
     await execute(
-      `UPDATE articles SET ${aiSummaryCol} = $1, ${keyPointsCol} = $2 WHERE id = $3`,
+      `UPDATE articles SET ${aiSummaryCol} = $1, ${keyPointsCol} = $2, ${audioCol} = '', ${audioHashCol} = '' WHERE id = $3`,
       [summary, JSON.stringify(key_points), id]
     );
 

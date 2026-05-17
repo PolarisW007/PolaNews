@@ -25,6 +25,8 @@ export function rowToArticle(
     ai_key_points: parseJsonField(row.ai_key_points, []),
     ai_summary_en: (row.ai_summary_en as string) || '',
     ai_summary_ja: (row.ai_summary_ja as string) || '',
+    ai_key_points_en: parseJsonField(row.ai_key_points_en, []),
+    ai_key_points_ja: parseJsonField(row.ai_key_points_ja, []),
     cover_image: (row.cover_image as string) || '',
     published_at: row.published_at ? new Date(row.published_at as string).toISOString() : '',
     categories: parseJsonField(row.categories, {} as ArticleCategories),
@@ -45,6 +47,9 @@ export function rowToArticle(
     audio_url: (row.audio_url as string) || '',
     audio_url_en: (row.audio_url_en as string) || '',
     audio_url_ja: (row.audio_url_ja as string) || '',
+    audio_text_hash: (row.audio_text_hash as string) || '',
+    audio_text_hash_en: (row.audio_text_hash_en as string) || '',
+    audio_text_hash_ja: (row.audio_text_hash_ja as string) || '',
   };
 }
 

@@ -3,10 +3,16 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { execute, query, queryOne } from '../db/schema';
+import { buildArticleSpeechText } from '../article-speech';
+import { createHash } from 'crypto';
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.COSYVOICE_API_KEY || '';
 
 const AUDIO_DIR = join(process.cwd(), 'data', 'audio');
+
+export function hashSpeechText(text: string): string {
+  return createHash('sha256').update(text.trim()).digest('hex');
+}
 
 function ensureAudioDir() {
   if (!existsSync(AUDIO_DIR)) {
@@ -79,7 +85,7 @@ async function synthesizeCosyVoice(
       return null;
     }
 
-    const safeText = text.slice(0, 800).replace(/'/g, "'\\''");
+    const safeText = text.slice(0, 1600).replace(/'/g, "'\\''");
     const { stdout, stderr } = await execAsync(
       `python3 "${scriptPath}" --text '${safeText}' --voice "${voice}" --output "${filepath}" --model cosyvoice-v3-flash`,
       {
@@ -196,10 +202,11 @@ export async function synthesizePendingAudio(
     summary: string;
     summary_zh: string;
     ai_summary: string;
+    ai_key_points: unknown;
   }>(
-    `SELECT id, title, title_zh, summary, summary_zh, ai_summary
+    `SELECT id, title, title_zh, summary, summary_zh, ai_summary, ai_key_points
      FROM articles
-     WHERE (audio_url IS NULL OR audio_url = '')
+     WHERE ((audio_url IS NULL OR audio_url = '') OR (audio_text_hash IS NULL OR audio_text_hash = ''))
        AND (title_zh IS NOT NULL AND title_zh <> '')
      ORDER BY published_at DESC NULLS LAST, created_at DESC
      LIMIT $1`,
@@ -210,9 +217,7 @@ export async function synthesizePendingAudio(
 
   let synthesized = 0;
   for (const row of rows) {
-    const title = (row.title_zh || row.title || '').trim();
-    const body = (row.ai_summary || row.summary_zh || row.summary || '').trim();
-    const text = (title && body ? `${title}。${body}` : title || body).slice(0, 500);
+    const text = buildArticleSpeechText(row, 'zh', 1600);
     if (!text) continue;
 
     try {
@@ -221,8 +226,8 @@ export async function synthesizePendingAudio(
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
       const url = `${basePath}/api/tts/audio/${result.filename}`;
       await execute(
-        'UPDATE articles SET audio_url = $1, audio_voice = $2 WHERE id = $3',
-        [url, voice, row.id]
+        'UPDATE articles SET audio_url = $1, audio_voice = $2, audio_text_hash = $3 WHERE id = $4',
+        [url, voice, hashSpeechText(text), row.id]
       );
       synthesized++;
     } catch (e) {
