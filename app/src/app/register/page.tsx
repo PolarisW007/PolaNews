@@ -38,6 +38,7 @@ export default function RegisterPage() {
       const data = await api.auth.register(email, password, displayName);
       localStorage.setItem('auth_token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
+      window.dispatchEvent(new Event('polanews-auth-change'));
       router.push('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '注册失败，请重试');

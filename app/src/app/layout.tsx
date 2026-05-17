@@ -13,6 +13,20 @@ export const metadata: Metadata = {
   description: '全球资讯 RSS 聚合阅读平台，AI 驱动的新闻摘要与分析',
 };
 
+const themeInitScript = `
+(() => {
+  try {
+    const stored = localStorage.getItem('polanews_theme') || 'dark';
+    const theme = stored === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : stored;
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,6 +34,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className={`${inter.variable} antialiased`}>
         <ToastProvider>{children}</ToastProvider>
       </body>

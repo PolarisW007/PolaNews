@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Check, Settings, Eye, EyeOff, Lock } from 'lucide-react';
+import { Loader2, Check, Settings, Eye, EyeOff, Lock, Palette, Monitor, Moon, Sun, Sparkles } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
 import { api } from '@/lib/api-client';
 import { useToast } from '@/components/ui/Toast';
@@ -16,16 +17,87 @@ interface UserSettings {
   followed_categories: string[];
 }
 
+interface ThemeOption {
+  value: string;
+  label: string;
+  icon: LucideIcon;
+  surface: string;
+  panel: string;
+  accent: string;
+  muted: string;
+  text: string;
+}
+
 const LANGUAGES = [
   { value: 'zh', label: '中文' },
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
 ];
 
-const THEMES = [
-  { value: 'dark', label: '深色' },
-  { value: 'light', label: '浅色' },
-  { value: 'system', label: '跟随系统' },
+const THEME_STORAGE_KEY = 'polanews_theme';
+const AUTH_CHANGE_EVENT = 'polanews-auth-change';
+
+const THEMES: ThemeOption[] = [
+  {
+    value: 'dark',
+    label: '一念绿',
+    icon: Sparkles,
+    surface: '#050505',
+    panel: '#0a0d10',
+    accent: '#00ff9d',
+    muted: '#1a222c',
+    text: '#E0F2E9',
+  },
+  {
+    value: 'zhenjing',
+    label: '真境玄金',
+    icon: Palette,
+    surface: '#080706',
+    panel: '#11100d',
+    accent: '#f6c76f',
+    muted: '#2a2418',
+    text: '#fff3d7',
+  },
+  {
+    value: 'aurora',
+    label: '极夜蓝',
+    icon: Moon,
+    surface: '#030711',
+    panel: '#081120',
+    accent: '#59d8ff',
+    muted: '#19304a',
+    text: '#e9f7ff',
+  },
+  {
+    value: 'amber',
+    label: '琥珀暖光',
+    icon: Sun,
+    surface: '#110b07',
+    panel: '#19100b',
+    accent: '#ffb15c',
+    muted: '#332014',
+    text: '#fff0df',
+  },
+  {
+    value: 'light',
+    label: '清昼',
+    icon: Sun,
+    surface: '#f6f8f5',
+    panel: '#ffffff',
+    accent: '#087f5b',
+    muted: '#dce7e1',
+    text: '#14211b',
+  },
+  {
+    value: 'system',
+    label: '跟随系统',
+    icon: Monitor,
+    surface: '#0f1115',
+    panel: '#20242b',
+    accent: '#9ee7c7',
+    muted: '#343a43',
+    text: '#f2f5f4',
+  },
 ];
 
 const DIGEST_TIMES = ['08:00', '12:00', '20:00'];
@@ -42,6 +114,11 @@ const CATEGORIES = [
 /** 立即应用主题到 document */
 function applyTheme(theme: string) {
   const root = document.documentElement;
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Storage can be unavailable in hardened browser modes; theme preview still applies.
+  }
   if (theme === 'system') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     root.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
@@ -75,18 +152,43 @@ export default function SettingsPage() {
   const loadSettings = useCallback(async () => {
     try {
       const data = await api.settings.get() as UserSettings;
-      setSettings(data);
+      const storedTheme = typeof window !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : '';
+      const nextSettings = { ...data, theme: data.theme || storedTheme || 'dark' };
+      setSettings(nextSettings);
+      applyTheme(nextSettings.theme);
     } catch (e) { toast(e instanceof Error ? e.message : '加载设置失败，请重试', 'error'); }
     setLoading(false);
   }, [toast]);
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
+  useEffect(() => {
+    if (settings.theme !== 'system') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const syncSystemTheme = () => applyTheme('system');
+    media.addEventListener('change', syncSystemTheme);
+    return () => media.removeEventListener('change', syncSystemTheme);
+  }, [settings.theme]);
+
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
     try {
-      await api.settings.update(settings as unknown as Record<string, unknown>);
+      const updated = await api.settings.update(settings as unknown as Record<string, unknown>) as UserSettings;
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser) as Record<string, unknown>;
+          localStorage.setItem('user', JSON.stringify({
+            ...user,
+            display_name: updated.display_name || settings.display_name,
+            email: updated.email || settings.email,
+          }));
+          window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+        } catch {
+          // Ignore malformed local user cache; server settings are already saved.
+        }
+      }
       setSaved(true);
       toast('设置已保存', 'success');
       setTimeout(() => setSaved(false), 3000);
@@ -110,6 +212,11 @@ export default function SettingsPage() {
         ? prev.followed_categories.filter(c => c !== cat)
         : [...prev.followed_categories, cat],
     }));
+  };
+
+  const updateTheme = (theme: string) => {
+    setSettings(prev => ({ ...prev, theme }));
+    applyTheme(theme);
   };
 
   const handleChangePassword = async () => {
@@ -247,32 +354,79 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* 主题 */}
+          {/* 主题选择 */}
           <section
             className="rounded-xl p-3 sm:p-5"
             style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
           >
-            <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider mb-4 sm:mb-5" style={{ color: 'var(--accent)' }}>
-              主题
-            </h2>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              {THEMES.map(t => (
-                <button
-                  key={t.value}
-                  onClick={() => {
-                    setSettings({ ...settings, theme: t.value });
-                    applyTheme(t.value);
-                  }}
-                  className="flex-1 min-w-0 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium transition-all"
-                  style={{
-                    backgroundColor: settings.theme === t.value ? 'var(--accent)' : 'var(--bg-primary)',
-                    color: settings.theme === t.value ? 'var(--bg-primary)' : 'var(--text-secondary)',
-                    border: `1px solid ${settings.theme === t.value ? 'var(--accent)' : 'var(--border)'}`,
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div className="mb-4 sm:mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Palette size={16} style={{ color: 'var(--accent)' }} />
+                <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                  主题选择
+                </h2>
+              </div>
+              <span className="rounded-full px-2 py-1 text-[11px]" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                {THEMES.find(t => t.value === settings.theme)?.label || '一念绿'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {THEMES.map(t => {
+                const active = settings.theme === t.value;
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => updateTheme(t.value)}
+                    className="group min-w-0 overflow-hidden rounded-lg p-0 text-left transition-all active:scale-[0.99]"
+                    style={{
+                      backgroundColor: active ? 'var(--bg-hover)' : 'var(--bg-primary)',
+                      border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                      boxShadow: active ? '0 0 0 1px var(--glow), 0 12px 34px var(--glow)' : 'none',
+                    }}
+                    aria-pressed={active}
+                  >
+                    <div
+                      className="h-20 p-3"
+                      style={{
+                        background: `linear-gradient(135deg, ${t.surface} 0%, ${t.panel} 54%, ${t.muted} 100%)`,
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="h-2 w-14 rounded-full" style={{ backgroundColor: t.accent, boxShadow: `0 0 18px ${t.accent}` }} />
+                        <span className="h-7 w-7 rounded-full border flex items-center justify-center" style={{ borderColor: t.accent, color: t.accent }}>
+                          <Icon size={14} />
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-[1fr_2fr] gap-2">
+                        <span className="h-5 rounded" style={{ backgroundColor: t.panel, border: `1px solid ${t.muted}` }} />
+                        <span className="h-5 rounded" style={{ backgroundColor: t.muted }} />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 px-3 py-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: t.accent }} />
+                        <span className="truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {t.label}
+                        </span>
+                      </div>
+                      <span
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                        style={{
+                          backgroundColor: active ? 'var(--accent)' : 'transparent',
+                          border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                          color: active ? 'var(--bg-primary)' : 'transparent',
+                        }}
+                      >
+                        <Check size={12} />
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </section>
 

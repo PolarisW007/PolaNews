@@ -26,6 +26,7 @@ export default function LoginPage() {
       const data = await api.auth.login(email, password);
       localStorage.setItem('auth_token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
+      window.dispatchEvent(new Event('polanews-auth-change'));
       router.push('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '登录失败，请重试');
