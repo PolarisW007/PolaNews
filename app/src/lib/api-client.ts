@@ -48,7 +48,7 @@ export const api = {
     fetch: (feed_id?: string) =>
       request('/api/feeds/fetch', {
         method: 'POST',
-        body: JSON.stringify(feed_id ? { feed_id } : { retry_errored: true }),
+        body: JSON.stringify(feed_id ? { feed_id, fetch_only: true } : { retry_errored: true, fetch_only: true }),
       }),
     add: (url: string, title: string, category: string) =>
       request('/api/feeds', { method: 'POST', body: JSON.stringify({ url, title, category }) }),

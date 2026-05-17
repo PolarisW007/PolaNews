@@ -31,6 +31,7 @@ interface FetchResult {
   newly_translated?: number;
   newly_summarized?: number;
   newly_voiced?: number;
+  fetch_only?: boolean;
 }
 
 export default function SubscriptionsPage() {
@@ -79,6 +80,9 @@ export default function SubscriptionsPage() {
     const succeeded = counters.feed_succeeded ?? 0;
     const failed = counters.feed_failed ?? 0;
     const recovered = counters.feed_recovered ?? 0;
+    if (counters.fetch_only) {
+      return `抓取完成：源 ${succeeded}/${attempted}，恢复 ${recovered} 个，新增 ${counters.new_articles ?? 0} 篇${failed ? `，失败 ${failed} 个` : ''}`;
+    }
     return `抓取完成：源 ${succeeded}/${attempted}，恢复 ${recovered} 个，新增 ${counters.new_articles ?? 0} 篇，翻译 ${counters.newly_translated ?? counters.translated ?? 0}，摘要 ${counters.newly_summarized ?? counters.summarized ?? 0}，语音 ${counters.newly_voiced ?? counters.audio_synthesized ?? 0}${failed ? `，失败 ${failed} 个` : ''}`;
   };
 

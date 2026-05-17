@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db/schema';
-import { runFullIngest } from '@/lib/rss/engine';
+import { fetchAllFeeds, runFullIngest } from '@/lib/rss/engine';
 import { invalidateDigestCache } from '@/lib/services/digest-cache';
 import { invalidateFeedsCache } from '@/app/api/feeds/route';
 
@@ -23,6 +23,43 @@ export async function POST(req: NextRequest) {
     const feedIds = Array.isArray(body.feed_ids)
       ? body.feed_ids.filter((id): id is string => typeof id === 'string')
       : feedId ? [feedId] : undefined;
+    const fetchOnly = body.fetch_only === true;
+
+    if (fetchOnly) {
+      const fetchSummary = await fetchAllFeeds({
+        includeErrored: true,
+        feedIds,
+      });
+
+      invalidateDigestCache();
+      invalidateFeedsCache();
+
+      const feedCount = await queryOne('SELECT COUNT(*) as count FROM feeds') as { count: number | string };
+      const articleCount = await queryOne('SELECT COUNT(*) as count FROM articles') as { count: number | string };
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          feeds_count: Number(feedCount.count),
+          articles_count: Number(articleCount.count),
+          feed_attempted: fetchSummary.attempted,
+          feed_succeeded: fetchSummary.succeeded,
+          feed_failed: fetchSummary.failed,
+          feed_recovered: fetchSummary.recovered,
+          feed_errors: fetchSummary.errors,
+          new_articles: fetchSummary.new_articles,
+          translated: 0,
+          summarized: 0,
+          classified: 0,
+          audio_synthesized: 0,
+          newly_translated: 0,
+          newly_summarized: 0,
+          newly_voiced: 0,
+          fetch_only: true,
+          translating: false,
+        },
+      });
+    }
 
     const pipelineResult = await runFullIngest({
       translateLimit: 200,

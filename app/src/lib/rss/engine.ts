@@ -15,7 +15,7 @@ const RSS_HEADERS = {
 const parser = new Parser({
   headers: RSS_HEADERS,
   requestOptions: { family: 4 },
-  timeout: 15_000,
+  timeout: 10_000,
 });
 
 export interface ParsedArticle {
@@ -136,7 +136,7 @@ export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedRe
   }
 }
 
-const CONCURRENCY_LIMIT = 10;
+const CONCURRENCY_LIMIT = 15;
 const ERROR_THRESHOLD = 5;
 
 export interface FetchAllFeedsOptions {
