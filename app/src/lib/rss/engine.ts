@@ -1,10 +1,22 @@
 import Parser from 'rss-parser';
 import { v4 as uuid } from 'uuid';
+import dns from 'node:dns';
 import { query, queryOne, execute, withTransaction } from '../db/schema';
 import { translateArticleBatch, classifyArticle, summarizeArticle } from '../ai/llm';
 import { synthesizePendingAudio } from '../services/tts';
 
-const parser = new Parser();
+dns.setDefaultResultOrder('ipv4first');
+
+const RSS_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; PolaNews/1.0; +https://aipd.me/polanews)',
+  Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8',
+};
+
+const parser = new Parser({
+  headers: RSS_HEADERS,
+  requestOptions: { family: 4 },
+  timeout: 15_000,
+});
 
 export interface ParsedArticle {
   title: string;
@@ -21,6 +33,76 @@ export interface FeedResult {
   articles: ParsedArticle[];
   success: boolean;
   error?: string;
+}
+
+function decodeEntities(text: string): string {
+  return (text || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function cleanHtmlText(text: string): string {
+  return decodeEntities(
+    (text || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+async function fetchAnthropicNews(feedId: string): Promise<FeedResult> {
+  const res = await fetch('https://www.anthropic.com/news', {
+    headers: RSS_HEADERS,
+    redirect: 'follow',
+  });
+  if (!res.ok) {
+    throw new Error(`Anthropic news fallback failed: HTTP ${res.status}`);
+  }
+
+  const html = await res.text();
+  const seen = new Set<string>();
+  const articles: ParsedArticle[] = [];
+  const linkPattern = /href="(\/news\/[^"#?]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkPattern.exec(html)) && articles.length < 20) {
+    const path = match[1];
+    if (seen.has(path)) continue;
+    seen.add(path);
+
+    const text = cleanHtmlText(match[2]);
+    if (!text) continue;
+
+    const dateMatch = text.match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\b/);
+    const publishedAt = dateMatch ? new Date(dateMatch[0]).toISOString() : undefined;
+    const summary = text.replace(/\b(?:Product|Announcements|Research|Policy|Company)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    const title = (dateMatch ? summary.slice(dateMatch.index! + dateMatch[0].length) : summary)
+      .replace(/^(?:Product|Announcements|Research|Policy|Company)\s+/i, '')
+      .trim()
+      .slice(0, 180);
+
+    if (!title) continue;
+    articles.push({
+      title,
+      url: `https://www.anthropic.com${path}`,
+      author: 'Anthropic',
+      content: summary,
+      summary,
+      publishedAt,
+    });
+  }
+
+  if (articles.length === 0) {
+    throw new Error('Anthropic news fallback found no articles');
+  }
+
+  return { feedId, articles, success: true };
 }
 
 export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedResult> {
@@ -41,6 +123,14 @@ export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedRe
     });
     return { feedId, articles, success: true };
   } catch (err) {
+    if (/^https:\/\/www\.anthropic\.com\/feed\/?$/i.test(feedUrl)) {
+      try {
+        return await fetchAnthropicNews(feedId);
+      } catch (fallbackErr) {
+        const message = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        return { feedId, articles: [], success: false, error: message };
+      }
+    }
     const message = err instanceof Error ? err.message : String(err);
     return { feedId, articles: [], success: false, error: message };
   }
@@ -49,13 +139,49 @@ export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedRe
 const CONCURRENCY_LIMIT = 10;
 const ERROR_THRESHOLD = 5;
 
-export async function fetchAllFeeds(): Promise<void> {
-  const feeds = await query<{ id: string; url: string }>(
-    `SELECT id, url FROM feeds WHERE status = 'active' ORDER BY last_fetched_at IS NULL DESC, last_fetched_at ASC`
-  );
-  if (feeds.length === 0) return;
+export interface FetchAllFeedsOptions {
+  includeErrored?: boolean;
+  feedIds?: string[];
+}
 
-  const chunks: { id: string; url: string }[][] = [];
+export interface FetchAllFeedsSummary {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  recovered: number;
+  new_articles: number;
+  errors: { feed_id: string; title: string; error: string }[];
+}
+
+export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise<FetchAllFeedsSummary> {
+  const params: unknown[] = [];
+  const statusClause = options.includeErrored
+    ? "status IN ('active', 'error')"
+    : "status = 'active'";
+  let idClause = '';
+  if (options.feedIds?.length) {
+    params.push(options.feedIds);
+    idClause = `AND id = ANY($${params.length}::uuid[])`;
+  }
+
+  const feeds = await query<{ id: string; title: string; url: string; status: string }>(
+    `SELECT id, title, url, status FROM feeds
+     WHERE ${statusClause} ${idClause}
+     ORDER BY last_fetched_at IS NULL DESC, last_fetched_at ASC`,
+    params
+  );
+
+  const summary: FetchAllFeedsSummary = {
+    attempted: feeds.length,
+    succeeded: 0,
+    failed: 0,
+    recovered: 0,
+    new_articles: 0,
+    errors: [],
+  };
+  if (feeds.length === 0) return summary;
+
+  const chunks: { id: string; title: string; url: string; status: string }[][] = [];
   for (let i = 0; i < feeds.length; i += CONCURRENCY_LIMIT) {
     chunks.push(feeds.slice(i, i + CONCURRENCY_LIMIT));
   }
@@ -68,9 +194,11 @@ export async function fetchAllFeeds(): Promise<void> {
     for (const settled of results) {
       if (settled.status === 'rejected') continue;
       const result = settled.value;
+      const feed = chunk.find((f) => f.id === result.feedId);
 
       if (result.success) {
         try {
+          let inserted = 0;
           await withTransaction(async (client) => {
             for (const art of result.articles) {
               const articleUrl = String(art.url || '').trim();
@@ -94,12 +222,25 @@ export async function fetchAllFeeds(): Promise<void> {
                   art.publishedAt ? new Date(art.publishedAt).toISOString() : new Date().toISOString(),
                 ]
               );
+              inserted++;
             }
-            await client.query(`UPDATE feeds SET last_fetched_at = NOW(), error_count = 0 WHERE id = $1`, [result.feedId]);
+            await client.query(
+              `UPDATE feeds SET last_fetched_at = NOW(), error_count = 0, status = 'active' WHERE id = $1`,
+              [result.feedId]
+            );
           });
+          summary.succeeded++;
+          summary.new_articles += inserted;
+          if (feed?.status === 'error') summary.recovered++;
         } catch (e) {
           console.error(`Error saving articles for feed ${result.feedId}:`, e);
           await execute('UPDATE feeds SET error_count = error_count + 1 WHERE id = $1', [result.feedId]);
+          summary.failed++;
+          summary.errors.push({
+            feed_id: result.feedId,
+            title: feed?.title || result.feedId,
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       } else {
         const row = await queryOne<{ error_count: number }>('SELECT error_count FROM feeds WHERE id = $1', [result.feedId]);
@@ -108,9 +249,17 @@ export async function fetchAllFeeds(): Promise<void> {
         if (newCount >= ERROR_THRESHOLD) {
           await execute(`UPDATE feeds SET status = 'error' WHERE id = $1`, [result.feedId]);
         }
+        summary.failed++;
+        summary.errors.push({
+          feed_id: result.feedId,
+          title: feed?.title || result.feedId,
+          error: result.error || 'Unknown feed error',
+        });
       }
     }
   }
+
+  return summary;
 }
 
 function isLikelyChinese(text: string) {
@@ -294,6 +443,12 @@ export async function summarizeMissingChineseArticles(limit = 30): Promise<numbe
 
 export interface IngestResult {
   fetched: boolean;
+  feed_attempted: number;
+  feed_succeeded: number;
+  feed_failed: number;
+  feed_recovered: number;
+  new_articles: number;
+  feed_errors: { feed_id: string; title: string; error: string }[];
   translated: number;
   summarized: number;
   classified: number;
@@ -312,6 +467,8 @@ export async function runFullIngest(options?: {
   classifyLimit?: number;
   audioLimit?: number;
   skipFetch?: boolean;
+  includeErroredFeeds?: boolean;
+  feedIds?: string[];
 }): Promise<IngestResult> {
   const translateLimit = options?.translateLimit ?? 100;
   const summaryLimit = options?.summaryLimit ?? 40;
@@ -320,6 +477,12 @@ export async function runFullIngest(options?: {
 
   const result: IngestResult = {
     fetched: false,
+    feed_attempted: 0,
+    feed_succeeded: 0,
+    feed_failed: 0,
+    feed_recovered: 0,
+    new_articles: 0,
+    feed_errors: [],
     translated: 0,
     summarized: 0,
     classified: 0,
@@ -328,8 +491,17 @@ export async function runFullIngest(options?: {
 
   if (!options?.skipFetch) {
     try {
-      await fetchAllFeeds();
+      const fetchSummary = await fetchAllFeeds({
+        includeErrored: options?.includeErroredFeeds,
+        feedIds: options?.feedIds,
+      });
       result.fetched = true;
+      result.feed_attempted = fetchSummary.attempted;
+      result.feed_succeeded = fetchSummary.succeeded;
+      result.feed_failed = fetchSummary.failed;
+      result.feed_recovered = fetchSummary.recovered;
+      result.new_articles = fetchSummary.new_articles;
+      result.feed_errors = fetchSummary.errors.slice(0, 10);
     } catch (e) {
       console.error('[Pipeline] fetchAllFeeds failed:', e);
       result.error = e instanceof Error ? e.message : String(e);

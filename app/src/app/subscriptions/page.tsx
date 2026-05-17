@@ -14,7 +14,23 @@ interface Feed {
   category: string;
   language: string;
   status: string;
+  error_count: number;
   is_preset: number;
+}
+
+interface FetchResult {
+  articles_count?: number;
+  feed_attempted?: number;
+  feed_succeeded?: number;
+  feed_failed?: number;
+  feed_recovered?: number;
+  new_articles?: number;
+  translated?: number;
+  summarized?: number;
+  audio_synthesized?: number;
+  newly_translated?: number;
+  newly_summarized?: number;
+  newly_voiced?: number;
 }
 
 export default function SubscriptionsPage() {
@@ -33,7 +49,7 @@ export default function SubscriptionsPage() {
       toast('加载订阅源失败', 'error');
     }
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => { loadFeeds(); }, [loadFeeds]);
 
@@ -54,33 +70,44 @@ export default function SubscriptionsPage() {
 
   const [importing, setImporting] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [refreshingFeedId, setRefreshingFeedId] = useState<string | null>(null);
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-  /** 立即抓取：触发完整管道（fetch → translate → summary → classify → TTS），后台异步跑 */
+  const buildFetchToast = (counters: FetchResult) => {
+    const attempted = counters.feed_attempted ?? 0;
+    const succeeded = counters.feed_succeeded ?? 0;
+    const failed = counters.feed_failed ?? 0;
+    const recovered = counters.feed_recovered ?? 0;
+    return `抓取完成：源 ${succeeded}/${attempted}，恢复 ${recovered} 个，新增 ${counters.new_articles ?? 0} 篇，翻译 ${counters.newly_translated ?? counters.translated ?? 0}，摘要 ${counters.newly_summarized ?? counters.summarized ?? 0}，语音 ${counters.newly_voiced ?? counters.audio_synthesized ?? 0}${failed ? `，失败 ${failed} 个` : ''}`;
+  };
+
+  /** 立即抓取：触发完整管道（fetch → translate → summary → classify → TTS），并重试 error 源 */
   const handleFetchAll = async () => {
     if (fetching) return;
     setFetching(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${basePath}/api/feeds/fetch`, { method: 'POST', headers });
-      const json = await res.json();
-      if (json.success) {
-        const counters = json.data || {};
-        toast(
-          `抓取完成：共 ${counters.articles_count ?? 0} 篇，翻译 ${counters.newly_translated ?? counters.translated ?? 0}，摘要 ${counters.newly_summarized ?? counters.summarized ?? 0}，合成语音 ${counters.newly_voiced ?? counters.audio_synthesized ?? 0}`,
-          'success'
-        );
-        loadFeeds();
-      } else {
-        toast(json.error || '抓取失败', 'error');
-      }
+      const counters = await api.feeds.fetch() as FetchResult;
+      toast(buildFetchToast(counters), counters.feed_failed ? 'info' : 'success');
+      loadFeeds();
     } catch (e) {
       toast(e instanceof Error ? e.message : '抓取失败', 'error');
     } finally {
       setFetching(false);
+    }
+  };
+
+  const handleFetchFeed = async (feed: Feed) => {
+    if (refreshingFeedId) return;
+    setRefreshingFeedId(feed.id);
+    try {
+      const counters = await api.feeds.fetch(feed.id) as FetchResult;
+      toast(`「${feed.title}」抓取完成：新增 ${counters.new_articles ?? 0} 篇${counters.feed_recovered ? '，状态已恢复' : ''}`, counters.feed_failed ? 'info' : 'success');
+      loadFeeds();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '抓取失败', 'error');
+    } finally {
+      setRefreshingFeedId(null);
     }
   };
 
@@ -282,11 +309,24 @@ export default function SubscriptionsPage() {
                           color: feed.status === 'active' ? 'var(--accent)' : 'var(--danger)',
                         }}
                       >
-                        {feed.status}
+                        {feed.status}{feed.status === 'error' && feed.error_count ? ` · ${feed.error_count}` : ''}
                       </span>
                       <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
                         {feed.language}
                       </span>
+                      <button
+                        className="p-1.5 rounded hover:opacity-80 disabled:opacity-50"
+                        onClick={() => handleFetchFeed(feed)}
+                        disabled={refreshingFeedId === feed.id}
+                        title="手动抓取此订阅源"
+                        style={{ color: feed.status === 'error' ? 'var(--accent)' : 'var(--text-secondary)' }}
+                      >
+                        {refreshingFeedId === feed.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={14} />
+                        )}
+                      </button>
                       {feed.site_url && (
                         <a href={feed.site_url} target="_blank" rel="noopener noreferrer">
                           <ExternalLink size={14} style={{ color: 'var(--text-secondary)' }} />

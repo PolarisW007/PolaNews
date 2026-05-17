@@ -45,6 +45,11 @@ export const api = {
   },
   feeds: {
     list: () => request('/api/feeds'),
+    fetch: (feed_id?: string) =>
+      request('/api/feeds/fetch', {
+        method: 'POST',
+        body: JSON.stringify(feed_id ? { feed_id } : { retry_errored: true }),
+      }),
     add: (url: string, title: string, category: string) =>
       request('/api/feeds', { method: 'POST', body: JSON.stringify({ url, title, category }) }),
     delete: (feed_id: string) =>
