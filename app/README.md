@@ -69,6 +69,36 @@ npm start
 
 访问 http://localhost:3000
 
+### CLI 调用
+
+服务可以通过内置 CLI 给其他应用调用。CLI 默认连接 `http://localhost:3000/polanews`，输出稳定 JSON 到 stdout，适合脚本、Agent、自动化任务消费。
+
+```bash
+# 查看帮助
+node ./bin/polanews.mjs help
+
+# 配置线上或本地服务地址
+node ./bin/polanews.mjs config set --base-url http://aipd.me/polanews
+
+# 登录并保存 token（需要调用收藏、添加订阅等认证接口时使用）
+node ./bin/polanews.mjs login --email user@example.com --password '***' --save
+
+# 常用能力
+node ./bin/polanews.mjs articles list --limit 10 --category tech
+node ./bin/polanews.mjs articles get <articleId>
+node ./bin/polanews.mjs articles summarize <articleId> --lang zh
+node ./bin/polanews.mjs feeds fetch
+node ./bin/polanews.mjs digests latest --lang zh
+node ./bin/polanews.mjs broadcasts generate --lang zh --voice longshu_v3
+node ./bin/polanews.mjs shares generate --platform xiaohongshu --article-id <articleId>
+
+# 任意 API 桥接
+node ./bin/polanews.mjs api GET /api/articles --query limit=5
+node ./bin/polanews.mjs api POST /api/broadcast/generate --data '{"lang":"zh"}'
+```
+
+也可以在 `app/` 下执行 `npm link` 后直接使用全局命令 `polanews ...`，或用 `npm --silent run cli -- ...` 调试。环境变量 `POLANEWS_BASE_URL`、`POLANEWS_TOKEN`、`POLANEWS_CONFIG` 会覆盖本地配置文件。
+
 ### Docker 部署
 
 ```bash

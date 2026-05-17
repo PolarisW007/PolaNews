@@ -1,0 +1,12 @@
+.env
+.env.*
+.next/
+node_modules/
+out/
+build/
+coverage/
+data/audio/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store

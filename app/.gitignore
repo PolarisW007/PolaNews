@@ -45,6 +45,8 @@ next-env.d.ts
 /data/*.db
 /data/*.db-wal
 /data/*.db-shm
+/data/audio/*
+!/data/audio/.gitkeep
 
 # IDE
 .idea/

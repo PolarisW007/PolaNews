@@ -1,12 +1,16 @@
 {
-  "name": "app",
+  "name": "polanews",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "polanews": "./bin/polanews.mjs"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cli": "node ./bin/polanews.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

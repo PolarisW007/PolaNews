@@ -49,6 +49,12 @@ next-env.d.ts
 data/*.db
 data/*.db-wal
 data/*.db-shm
+app/data/audio/*
+!app/data/audio/.gitkeep
+
+# local agent/tooling caches
+.qoder/
+.skill-build/
 
 # IDE
 .idea/
