@@ -104,7 +104,6 @@ export default function ArticlePage() {
   const [translatedHtml, setTranslatedHtml] = useState<string>('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
-  const [ttsAudioRef, setTtsAudioRef] = useState<HTMLAudioElement | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
   const [showSource, setShowSource] = useState(false);
   // TTS 预加载
@@ -118,11 +117,58 @@ export default function ArticlePage() {
   const [nextArticle, setNextArticle] = useState<NeighborInfo | null>(null);
 
   const ttsPreloadRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speakingArticleIdRef = useRef<string | null>(null);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextArticleRef = useRef<NeighborInfo | null>(null);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+  const stopTTS = useCallback(() => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+      audioRef.current = null;
+    }
+    if (typeof window !== 'undefined') {
+      window.speechSynthesis?.cancel();
+    }
+    speakingArticleIdRef.current = null;
+    setIsSpeaking(false);
+    setTtsLoading(false);
+  }, []);
+
+  const navigateToArticle = useCallback((articleId: string) => {
+    stopTTS();
+    router.push(`/article/${articleId}`);
+  }, [router, stopTTS]);
+
+  const handleTTSEnded = useCallback((playedArticleId: string) => {
+    if (speakingArticleIdRef.current !== playedArticleId) return;
+    speakingArticleIdRef.current = null;
+    audioRef.current = null;
+    setIsSpeaking(false);
+
+    const next = nextArticleRef.current;
+    if (next?.id) {
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        navigateToArticle(next.id);
+      }, 250);
+    }
+  }, [navigateToArticle]);
+
+  useEffect(() => {
+    nextArticleRef.current = nextArticle;
+  }, [nextArticle]);
 
   // 加载文章 + 自动加载全文
   useEffect(() => {
     if (!id) return;
+    stopTTS();
     // 重置全文状态（切换文章时）
     setFulltextContent('');
     setFulltextLoading(false);
@@ -258,21 +304,21 @@ export default function ArticlePage() {
           .catch(() => {});
       }
     }).catch(() => { toast('加载文章失败', 'error'); }).finally(() => setLoading(false));
-  }, [id, toast, basePath]);
+  }, [id, toast, basePath, stopTTS]);
 
   // 键盘快捷键：← 上一篇, → 下一篇
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
       if (e.key === 'ArrowLeft' && prevArticle) {
-        router.push(`/article/${prevArticle.id}`);
+        navigateToArticle(prevArticle.id);
       } else if (e.key === 'ArrowRight' && nextArticle) {
-        router.push(`/article/${nextArticle.id}`);
+        navigateToArticle(nextArticle.id);
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [prevArticle, nextArticle, router]);
+  }, [prevArticle, nextArticle, navigateToArticle]);
 
   // 触摸手势：仅在移动端生效，左右滑动切换文章
   const touchRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
@@ -308,14 +354,14 @@ export default function ArticlePage() {
         if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current);
         swipeHintTimer.current = setTimeout(() => {
           setSwipeHint(null);
-          router.push(`/article/${prevArticle.id}`);
+          navigateToArticle(prevArticle.id);
         }, 300);
       } else if (dx < 0 && nextArticle) {
         setSwipeHint('left');
         if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current);
         swipeHintTimer.current = setTimeout(() => {
           setSwipeHint(null);
-          router.push(`/article/${nextArticle.id}`);
+          navigateToArticle(nextArticle.id);
         }, 300);
       }
     };
@@ -327,16 +373,14 @@ export default function ArticlePage() {
       document.removeEventListener('touchend', onTouchEnd);
       if (swipeHintTimer.current) clearTimeout(swipeHintTimer.current);
     };
-  }, [prevArticle, nextArticle, router]);
+  }, [prevArticle, nextArticle, navigateToArticle]);
 
   // 清理
   useEffect(() => {
     return () => {
-      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
-      if (ttsAudioRef) { ttsAudioRef.pause(); ttsAudioRef.removeAttribute('src'); }
+      stopTTS();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stopTTS]);
 
   // TTS 预加载 —— ai_summary 可用时立即后台合成
   const preloadTTS = useCallback(async (text: string) => {
@@ -404,12 +448,12 @@ export default function ArticlePage() {
 
   const handleTTS = async () => {
     if (isSpeaking) {
-      if (ttsAudioRef) { ttsAudioRef.pause(); ttsAudioRef.removeAttribute('src'); setTtsAudioRef(null); }
-      if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
-      setIsSpeaking(false);
+      stopTTS();
       return;
     }
 
+    stopTTS();
+    const playingArticleId = article?.id || id;
     const zhSummary = article ? getArticleSummary(article, 'zh') : '';
     const text = zhSummary || article?.content?.replace(/<[^>]*>/g, '') || '';
     if (!text.trim()) { toast('没有可朗读的内容', 'info'); return; }
@@ -417,9 +461,10 @@ export default function ArticlePage() {
     // 优先使用预加载的音频
     if (preloadedAudioUrl) {
       const audio = new Audio(preloadedAudioUrl);
-      audio.onended = () => { setIsSpeaking(false); setTtsAudioRef(null); };
-      audio.onerror = () => { setIsSpeaking(false); setTtsAudioRef(null); toast('音频播放失败', 'error'); };
-      setTtsAudioRef(audio);
+      audioRef.current = audio;
+      speakingArticleIdRef.current = playingArticleId;
+      audio.onended = () => handleTTSEnded(playingArticleId);
+      audio.onerror = () => { stopTTS(); toast('音频播放失败', 'error'); };
       setIsSpeaking(true);
       await audio.play();
       return;
@@ -443,9 +488,10 @@ export default function ArticlePage() {
       const data = await res.json();
       if (data.success && data.data?.url) {
         const audio = new Audio(data.data.url);
-        audio.onended = () => { setIsSpeaking(false); setTtsAudioRef(null); };
-        audio.onerror = () => { setIsSpeaking(false); setTtsAudioRef(null); toast('音频播放失败', 'error'); };
-        setTtsAudioRef(audio);
+        audioRef.current = audio;
+        speakingArticleIdRef.current = playingArticleId;
+        audio.onended = () => handleTTSEnded(playingArticleId);
+        audio.onerror = () => { stopTTS(); toast('音频播放失败', 'error'); };
         await audio.play();
         setIsSpeaking(true);
         setTtsLoading(false);
@@ -457,8 +503,9 @@ export default function ArticlePage() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
       utterance.lang = 'zh-CN'; utterance.rate = 1;
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      speakingArticleIdRef.current = playingArticleId;
+      utterance.onend = () => handleTTSEnded(playingArticleId);
+      utterance.onerror = () => stopTTS();
       setIsSpeaking(true);
       window.speechSynthesis.speak(utterance);
     } else {
@@ -622,7 +669,10 @@ export default function ArticlePage() {
         <div className="flex h-96 flex-col items-center justify-center gap-4">
           <p style={{ color: 'var(--text-secondary)' }}>文章未找到</p>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => {
+              stopTTS();
+              router.push('/');
+            }}
             className="rounded-lg px-4 py-2 text-sm"
             style={{ background: 'var(--bg-hover)', color: 'var(--accent)' }}
           >
@@ -658,7 +708,10 @@ export default function ArticlePage() {
         <article className="min-w-0">
           <div className="mb-4 sm:mb-6 flex items-center gap-1 sm:gap-2">
             <button
-              onClick={() => router.back()}
+              onClick={() => {
+                stopTTS();
+                router.back();
+              }}
               className="flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-sm transition-colors hover:opacity-80"
               style={{ color: 'var(--text-secondary)' }}
             >
@@ -667,7 +720,7 @@ export default function ArticlePage() {
             </button>
             <div className="mx-0.5 sm:mx-1 h-4 w-px" style={{ background: 'var(--border)' }} />
             <button
-              onClick={() => prevArticle && router.push(`/article/${prevArticle.id}`)}
+              onClick={() => prevArticle && navigateToArticle(prevArticle.id)}
               disabled={!prevArticle}
               className="flex items-center gap-1 rounded-lg px-2 sm:px-3 py-1.5 text-sm transition-all disabled:opacity-30"
               style={{ color: prevArticle ? 'var(--text-secondary)' : 'var(--text-disabled)' }}
@@ -677,7 +730,7 @@ export default function ArticlePage() {
               <span className="hidden sm:inline">上一篇</span>
             </button>
             <button
-              onClick={() => nextArticle && router.push(`/article/${nextArticle.id}`)}
+              onClick={() => nextArticle && navigateToArticle(nextArticle.id)}
               disabled={!nextArticle}
               className="flex items-center gap-1 rounded-lg px-2 sm:px-3 py-1.5 text-sm transition-all disabled:opacity-30"
               style={{ color: nextArticle ? 'var(--text-secondary)' : 'var(--text-disabled)' }}
@@ -1166,7 +1219,7 @@ export default function ArticlePage() {
                 {relatedArticles.map((ra) => (
                   <button
                     key={ra.id}
-                    onClick={() => router.push(`/article/${ra.id}`)}
+                    onClick={() => navigateToArticle(ra.id)}
                     className="glow-border flex w-full flex-col gap-2 rounded-xl border p-4 text-left transition-colors hover:brightness-105"
                     style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
                   >
@@ -1217,7 +1270,7 @@ export default function ArticlePage() {
             >
               {prevArticle && (
                 <button
-                  onClick={() => router.push(`/article/${prevArticle.id}`)}
+                  onClick={() => navigateToArticle(prevArticle.id)}
                   className="group flex flex-col gap-1.5 rounded-xl p-4 text-left transition-all hover:brightness-110"
                   style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
                 >
@@ -1236,7 +1289,7 @@ export default function ArticlePage() {
               )}
               {nextArticle && (
                 <button
-                  onClick={() => router.push(`/article/${nextArticle.id}`)}
+                  onClick={() => navigateToArticle(nextArticle.id)}
                   className="group flex flex-col gap-1.5 rounded-xl p-4 text-right transition-all hover:brightness-110"
                   style={{
                     background: 'var(--bg-secondary)',
