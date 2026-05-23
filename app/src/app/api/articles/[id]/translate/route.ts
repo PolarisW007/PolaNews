@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db/schema';
-import { callLLM, extractJsonArray } from '@/lib/ai/llm';
+import { callLLM, extractJsonArray, isLLMProviderError } from '@/lib/ai/llm';
 
 interface TranslationParagraph {
   original: string;
@@ -251,6 +251,9 @@ async function translateHtml(articleId: string, html: string, force?: boolean) {
       });
     } catch (e) {
       console.error('[translateHtml] batch error:', e);
+      if (isLLMProviderError(e)) {
+        throw e;
+      }
       batch.forEach((seg) => translationMap.set(seg.index, seg.text));
     }
   }

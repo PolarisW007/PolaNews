@@ -69,6 +69,11 @@ export async function callLLM(
   return stripReasoning(content).trim();
 }
 
+export function isLLMProviderError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /LLM_API_KEY|LLM API error|Arrearage|overdue-payment|insufficient_quota|Access denied/i.test(message);
+}
+
 /**
  * 某些推理模型（如 MiniMax-M 系列、DeepSeek-R1）会在正式输出前附加
  * `<think>...</think>` 思维链。这里统一剥除，避免污染摘要/digest 正文。
@@ -259,6 +264,9 @@ export async function translateArticleBatch(
       }
     } catch (e) {
       console.error('Batch translate error:', e);
+      if (isLLMProviderError(e)) {
+        throw e;
+      }
       for (const b of batch) {
         results.push({ id: b.id, title_zh: b.title, summary_zh: b.summary });
       }

@@ -7,6 +7,8 @@ import { buildArticleSpeechText } from '../article-speech';
 import { createHash } from 'crypto';
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.COSYVOICE_API_KEY || '';
+const PREFER_EDGE_TTS = process.env.TTS_PROVIDER === 'edge' || process.env.EDGE_TTS_ENABLED === 'true';
+let cosyVoiceUnavailable = false;
 
 const AUDIO_DIR = join(process.cwd(), 'data', 'audio');
 
@@ -59,7 +61,7 @@ export async function synthesizeAudio(
 
   const resolvedVoice = VOICE_COMPAT_MAP[voice] || voice;
 
-  if (DASHSCOPE_API_KEY) {
+  if (DASHSCOPE_API_KEY && !PREFER_EDGE_TTS && !cosyVoiceUnavailable) {
     const result = await synthesizeCosyVoice(text, resolvedVoice);
     if (result) return result;
   }
@@ -98,9 +100,22 @@ async function synthesizeCosyVoice(
       return { filename, filepath };
     }
 
+    const output = `${stdout}\n${stderr}`;
+    if (/Arrearage|Access denied|overdue-payment|account is in good standing/i.test(output)) {
+      cosyVoiceUnavailable = true;
+      console.error('[TTS] CosyVoice 账号不可用，已切换到 edge-tts 降级合成');
+      return null;
+    }
+
     console.error(`[TTS] CosyVoice Python 脚本错误: ${stderr}`);
     return null;
   } catch (e) {
+    const message = e instanceof Error ? `${e.message}\n${'stdout' in e ? String((e as { stdout?: unknown }).stdout || '') : ''}` : String(e);
+    if (/Arrearage|Access denied|overdue-payment|account is in good standing/i.test(message)) {
+      cosyVoiceUnavailable = true;
+      console.error('[TTS] CosyVoice 账号不可用，已切换到 edge-tts 降级合成');
+      return null;
+    }
     console.error('[TTS] CosyVoice 合成失败:', e);
     return null;
   }
@@ -110,6 +125,7 @@ async function synthesizeEdgeTTS(
   text: string,
   _voice: string
 ): Promise<{ filename: string; filepath: string } | null> {
+  void _voice;
   const edgeVoice = 'zh-CN-YunjianNeural';
 
   try {
