@@ -5,7 +5,12 @@ import { getDigestCache, setDigestCache, DIGEST_CACHE_TTL } from '@/lib/services
 
 function normalizeDateField(v: unknown): string {
   if (!v) return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) {
+    const year = v.getFullYear();
+    const month = String(v.getMonth() + 1).padStart(2, '0');
+    const day = String(v.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
   const s = String(v);
   // 已经是 YYYY-MM-DD 就直接返回
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
