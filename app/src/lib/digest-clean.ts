@@ -103,6 +103,11 @@ export function cleanDigestText(
     .replace(/\s+/g, ' ')
     .trim();
 
+  const repeatedPrefix = text.match(/^(.{6,160}?)\s+\1\s*[:：—-]\s*(.+)$/);
+  if (repeatedPrefix) {
+    text = `${repeatedPrefix[1]}：${repeatedPrefix[2]}`.trim();
+  }
+
   const title = cleanDigestText(options?.title || '', { maxChars: 240 });
   if (title) {
     const direct = new RegExp(`^${escapeRegExp(title)}\\s*[:：\\-—,，。]*\\s*`, 'i');
