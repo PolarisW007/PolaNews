@@ -103,6 +103,23 @@ export interface DailyDigest {
   created_at: string;
 }
 
+export interface DigestStory {
+  title: string;
+  summary: string;
+  why_it_matters?: string;
+  source?: string;
+  category?: string;
+  article_id?: string;
+}
+
+export interface StructuredDigest {
+  title: string;
+  lead: string;
+  top_stories: DigestStory[];
+  quick_reads: DigestStory[];
+  keywords: string[];
+}
+
 export interface DigestHeadline {
   title: string;
   summary: string;
@@ -120,6 +137,8 @@ export interface DigestStatistics {
   total_articles: number;
   source_count: number;
   top_keywords: string[];
+  structured_digest?: StructuredDigest;
+  quality_warnings?: string[];
 }
 
 export interface ApiResponse<T = unknown> {

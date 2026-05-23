@@ -1,3 +1,5 @@
+import { cleanStructuredDigest, type StructuredDigest } from '../digest-clean';
+
 const API_KEY = process.env.LLM_API_KEY || '';
 const API_BASE = process.env.LLM_API_BASE || 'https://api.openai.com/v1';
 const MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -196,6 +198,100 @@ Use ## for sections, ### for sub-sections, and bullet points for items.`;
 
   const prompt = `Create a Daily Digest from these articles:\n\n${articleList}\n\nReturn full Markdown:`;
   return callLLM(prompt, systemPrompt);
+}
+
+export async function generateStructuredDigestContent(
+  articles: Array<{
+    title: string;
+    summary: string;
+    category: string;
+    importance: string;
+    source?: string;
+  }>,
+  lang: string
+): Promise<StructuredDigest> {
+  const fallback = buildFallbackStructuredDigest(articles);
+  if (MOCK_MODE || articles.length === 0) return fallback;
+
+  const langHint =
+    lang === 'zh'
+      ? '所有字段必须使用简体中文。'
+      : lang === 'ja'
+        ? 'すべてのフィールドを日本語で書いてください。'
+        : 'Write all fields in English.';
+
+  const systemPrompt = `你是 Daily Digest 主编，负责把新闻列表整理成适合海报分享的精选阅读 JSON。
+${langHint}
+只返回合法 JSON，不要 markdown，不要解释。
+JSON 格式：
+{
+  "title": "今日 AI 与科技简报",
+  "lead": "一句话说明今天最重要的变化",
+  "top_stories": [
+    {"title": "标题", "summary": "一句话事实摘要", "why_it_matters": "一句话价值判断", "source": "来源", "category": "分类"}
+  ],
+  "quick_reads": [
+    {"title": "标题", "summary": "30-50字快速浏览", "source": "来源", "category": "分类"}
+  ],
+  "keywords": ["关键词"]
+}
+约束：
+- top_stories 只选最重要 3 条，每条 summary 和 why_it_matters 都不超过 80 字
+- quick_reads 选 4-5 条，每条 summary 30-50 字
+- 不要出现 [Mock]、[general]、欢迎关注、公众号、更多精彩内容、Article URL、Comments URL
+- 不要照搬推广尾巴，不要重复标题`;
+
+  const articleList = articles.slice(0, 20).map((a, i) => (
+    `${i + 1}. [${a.category}] ${a.importance} | ${a.source || 'Unknown'} | ${a.title}\n${a.summary}`
+  )).join('\n\n');
+
+  try {
+    const text = await callLLM(`请生成结构化 Digest：\n\n${articleList}`, systemPrompt);
+    const parsed = extractJson(text) as unknown as Partial<StructuredDigest>;
+    const structured = cleanStructuredDigest(parsed);
+    if (structured.top_stories.length > 0 || structured.quick_reads.length > 0) {
+      return structured;
+    }
+  } catch (e) {
+    console.error('[Digest] Structured digest generation failed:', e);
+    if (isLLMProviderError(e)) throw e;
+  }
+
+  return fallback;
+}
+
+function buildFallbackStructuredDigest(
+  articles: Array<{
+    title: string;
+    summary: string;
+    category: string;
+    importance: string;
+    source?: string;
+  }>
+): StructuredDigest {
+  const top = articles.slice(0, 3).map((a) => ({
+    title: a.title,
+    summary: a.summary,
+    why_it_matters: a.importance === 'breaking' || a.importance === 'important'
+      ? '这条动态可能影响接下来的行业判断和资源流向。'
+      : '这是今天值得快速掌握的关键信息。',
+    source: a.source || '',
+    category: a.category,
+  }));
+  const quick = articles.slice(3, 8).map((a) => ({
+    title: a.title,
+    summary: a.summary,
+    source: a.source || '',
+    category: a.category,
+  }));
+
+  return cleanStructuredDigest({
+    title: '今日 AI 与科技简报',
+    lead: top[0]?.summary || '今天的重点变化集中在 AI、科技产品和产业动态。',
+    top_stories: top,
+    quick_reads: quick,
+    keywords: Array.from(new Set(articles.map((a) => a.category).filter(Boolean))).slice(0, 6),
+  });
 }
 
 export interface TranslateBatchItem {

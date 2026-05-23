@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db/schema';
 import { parseJsonField } from '@/lib/db/helpers';
 import { getDigestCache, setDigestCache, DIGEST_CACHE_TTL } from '@/lib/services/digest-cache';
+import {
+  cleanDigestMarkdown,
+  cleanDigestStory,
+  cleanDigestText,
+  cleanStructuredDigest,
+  type StructuredDigest,
+} from '@/lib/digest-clean';
 
 function normalizeDateField(v: unknown): string {
   if (!v) return '';
@@ -24,10 +31,33 @@ function extractTitleFromContent(content: string): string {
   return line ? line.replace(/^#\s+/, '').trim() : '';
 }
 
+function cleanCategorySummaries(value: unknown) {
+  const groups = parseJsonField<Record<string, { count?: number; items?: Array<{ title?: string; summary?: string; article_id?: string }> }>>(value, {});
+  return Object.fromEntries(
+    Object.entries(groups).map(([category, group]) => [
+      cleanDigestText(category, { maxChars: 24 }) || category,
+      {
+        count: group.count ?? group.items?.length ?? 0,
+        items: (group.items || []).map((item) => ({
+          ...item,
+          ...cleanDigestStory(item),
+        })),
+      },
+    ]),
+  );
+}
+
 function rowToDigest(row: Record<string, unknown>) {
-  const headlines = parseJsonField<Array<{ title?: string }>>(row.headlines, []);
-  const statistics = parseJsonField<{ total_articles?: number }>(row.statistics, {});
-  const full_content = (row.full_content as string) || '';
+  const headlines = parseJsonField<Array<{ title?: string; summary?: string }>>(row.headlines, [])
+    .map((item) => ({
+      ...item,
+      ...cleanDigestStory(item),
+    }));
+  const statistics = parseJsonField<{ total_articles?: number; structured_digest?: StructuredDigest }>(row.statistics, {});
+  const structured = statistics.structured_digest
+    ? cleanStructuredDigest(statistics.structured_digest)
+    : undefined;
+  const full_content = cleanDigestMarkdown((row.full_content as string) || '');
   const date = normalizeDateField(row.digest_date);
   const fallbackTitle = extractTitleFromContent(full_content)
     || (headlines[0]?.title as string | undefined)
@@ -42,8 +72,8 @@ function rowToDigest(row: Record<string, unknown>) {
     total_articles: statistics?.total_articles ?? 0,
     language: row.language as string,
     headlines,
-    category_summaries: parseJsonField(row.category_summaries, {}),
-    statistics,
+    category_summaries: cleanCategorySummaries(row.category_summaries),
+    statistics: structured ? { ...statistics, structured_digest: structured } : statistics,
     trending_keywords: parseJsonField(row.trending_keywords, []),
     full_content,
     created_at: row.created_at as string,

@@ -1,6 +1,14 @@
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute } from '../db/schema';
-import { generateDigestContent } from '../ai/llm';
+import { generateDigestContent, generateStructuredDigestContent } from '../ai/llm';
+import {
+  cleanDigestMarkdown,
+  cleanDigestStory,
+  cleanDigestText,
+  cleanStructuredDigest,
+  validateStructuredDigestQuality,
+  type StructuredDigest,
+} from '../digest-clean';
 
 interface ArticleRow {
   id: string;
@@ -12,19 +20,21 @@ interface ArticleRow {
   ai_summary: string;
   importance: string;
   categories: Record<string, string> | string;
+  feed_title: string;
 }
 
 /** 选中文优先，回退英文；lang 只在需要时把中文换成英文 */
 function pickTitle(r: ArticleRow, lang: string): string {
-  if (lang === 'zh') return r.title_zh || r.title || '';
-  return r.title || r.title_zh || '';
+  const title = lang === 'zh' ? r.title_zh || r.title || '' : r.title || r.title_zh || '';
+  return cleanDigestText(title, { maxChars: 90, maxSentenceChars: 90 });
 }
 
 function pickSummary(r: ArticleRow, lang: string): string {
-  if (lang === 'zh') {
-    return r.ai_summary || r.summary_zh || r.summary || r.title_zh || r.title || '';
-  }
-  return r.ai_summary || r.summary || r.summary_zh || r.title || '';
+  const title = pickTitle(r, lang);
+  const summary = lang === 'zh'
+    ? r.ai_summary || r.summary_zh || r.summary || r.title_zh || r.title || ''
+    : r.ai_summary || r.summary || r.summary_zh || r.title || '';
+  return cleanDigestText(summary, { title, maxChars: 180, maxSentenceChars: 90 });
 }
 
 function parseCategory(categories: Record<string, string> | string): string {
@@ -46,7 +56,7 @@ export interface DigestResult {
   language: string;
   headlines: Array<{ title: string; summary: string; article_id: string; importance: string; category: string }>;
   category_summaries: Record<string, { count: number; items: Array<{ title: string; summary: string; article_id: string }> }>;
-  statistics: { total_articles: number; source_count: number; top_keywords: string[] };
+  statistics: { total_articles: number; source_count: number; top_keywords: string[]; structured_digest?: StructuredDigest; quality_warnings?: string[] };
   trending_keywords: string[];
   full_content: string;
   created_at: string;
@@ -57,8 +67,10 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
   const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
 
   let rows = await query<ArticleRow>(
-    `SELECT id, feed_id, title, title_zh, summary, summary_zh, ai_summary, importance, categories
-     FROM articles
+    `SELECT a.id, a.feed_id, a.title, a.title_zh, a.summary, a.summary_zh, a.ai_summary, a.importance, a.categories,
+            f.title as feed_title
+     FROM articles a
+     INNER JOIN feeds f ON a.feed_id = f.id
      WHERE created_at >= $1
      ORDER BY
        CASE importance
@@ -74,8 +86,10 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
 
   if (rows.length < 5) {
     rows = await query<ArticleRow>(
-      `SELECT id, feed_id, title, title_zh, summary, summary_zh, ai_summary, importance, categories
-       FROM articles
+      `SELECT a.id, a.feed_id, a.title, a.title_zh, a.summary, a.summary_zh, a.ai_summary, a.importance, a.categories,
+              f.title as feed_title
+       FROM articles a
+       INNER JOIN feeds f ON a.feed_id = f.id
        ORDER BY
          CASE importance
            WHEN 'breaking' THEN 1
@@ -97,9 +111,12 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
     summary: pickSummary(r, lang),
     category: parseCategory(r.categories),
     importance: r.importance || 'normal',
+    source: cleanDigestText(r.feed_title || '', { maxChars: 32 }),
   }));
 
-  const fullContent = await generateDigestContent(articlesForLLM, lang);
+  const structured = cleanStructuredDigest(await generateStructuredDigestContent(articlesForLLM, lang));
+  const quality = validateStructuredDigestQuality(structured);
+  const fullContent = cleanDigestMarkdown(await generateDigestContent(articlesForLLM, lang));
 
   const byCategory: Record<string, Array<{ id: string; title: string; summary: string }>> = {};
   for (const r of top20) {
@@ -113,8 +130,14 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
   }
 
   const headlines = top20.slice(0, 3).map((r) => ({
-    title: pickTitle(r, lang),
-    summary: pickSummary(r, lang),
+    title: cleanDigestStory({
+      title: pickTitle(r, lang),
+      summary: pickSummary(r, lang),
+    }).title,
+    summary: cleanDigestStory({
+      title: pickTitle(r, lang),
+      summary: pickSummary(r, lang),
+    }).summary,
     article_id: r.id,
     importance: r.importance || 'normal',
     category: parseCategory(r.categories),
@@ -132,6 +155,8 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
     total_articles: top20.length,
     source_count: sourceCount,
     top_keywords: [] as string[],
+    structured_digest: structured,
+    quality_warnings: quality.violations,
   };
 
   const digestId = uuid();
@@ -155,7 +180,7 @@ export async function generateDailyDigest(lang: string = 'zh'): Promise<DigestRe
     language: inserted.language as string,
     headlines: (inserted.headlines as DigestResult['headlines']) || [],
     category_summaries: (inserted.category_summaries as DigestResult['category_summaries']) || {},
-    statistics: (inserted.statistics as DigestResult['statistics']) || { total_articles: 0, source_count: 0, top_keywords: [] },
+    statistics: (inserted.statistics as DigestResult['statistics']) || { total_articles: 0, source_count: 0, top_keywords: [], structured_digest: structured },
     trending_keywords: (inserted.trending_keywords as string[]) || [],
     full_content: (inserted.full_content as string) || '',
     created_at: (inserted.created_at as Date)?.toISOString() || '',

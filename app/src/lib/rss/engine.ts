@@ -4,6 +4,7 @@ import dns from 'node:dns';
 import { query, queryOne, execute, withTransaction } from '../db/schema';
 import { translateArticleBatch, classifyArticle, summarizeArticle } from '../ai/llm';
 import { synthesizePendingAudio } from '../services/tts';
+import { cleanDigestText } from '../digest-clean';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -413,13 +414,19 @@ export async function summarizeMissingChineseArticles(limit = 30): Promise<numbe
         if (!title && !source) return null;
 
         const result = await summarizeArticle(title || row.title, source || title, 'zh');
-        const summary = (result.summary || '').trim();
+        const summary = cleanDigestText((result.summary || '').trim(), {
+          title,
+          maxChars: 260,
+          maxSentenceChars: 110,
+        });
         if (!summary || !isLikelyChinese(summary)) return null;
 
         return {
           id: row.id,
           summary,
-          key_points: Array.isArray(result.key_points) ? result.key_points : [],
+          key_points: Array.isArray(result.key_points)
+            ? result.key_points.map((point) => cleanDigestText(point, { title, maxChars: 80, maxSentenceChars: 80 })).filter(Boolean)
+            : [],
         };
       })
     );

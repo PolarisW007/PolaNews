@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api-client';
+import { cleanDigestText, cleanStructuredDigest, type StructuredDigest } from '@/lib/digest-clean';
 import type { DailyDigest, DigestHeadline, DigestCategorySummary } from '@/lib/types';
 import MainLayout from '@/components/layout/MainLayout';
 import BroadcastPlayer from '@/components/ui/BroadcastPlayer';
@@ -84,7 +85,7 @@ function inlineFormat(s: string): string {
 }
 
 function plainDigestLine(line: string): string {
-  return line
+  const plain = line
     .replace(/^#{1,6}\s*/, '')
     .replace(/^[-*]\s+/, '')
     .replace(/^\d+[.)、]\s*/, '')
@@ -92,11 +93,46 @@ function plainDigestLine(line: string): string {
     .replace(/\*(.+?)\*/g, '$1')
     .replace(/`(.+?)`/g, '$1')
     .trim();
+  return cleanDigestText(plain, { maxChars: 180 });
 }
 
-function digestPosterSections(digest: DailyDigest) {
+function structuredPosterDigest(digest: DailyDigest): StructuredDigest {
+  const structured = digest.statistics?.structured_digest;
+  if (structured) {
+    const cleaned = cleanStructuredDigest(structured);
+    if (cleaned.top_stories.length > 0 || cleaned.quick_reads.length > 0) return cleaned;
+  }
+
+  const heads = (digest.headlines || []) as DigestHeadline[];
+  const topStories = heads.slice(0, 3).map((item) => ({
+    title: item.title,
+    summary: item.summary,
+    why_it_matters: '这是今天值得优先掌握的关键变化。',
+    source: '',
+    category: item.category,
+    article_id: item.article_id,
+  }));
+  const quickReads = heads.slice(3, 8).map((item) => ({
+    title: item.title,
+    summary: item.summary,
+    source: '',
+    category: item.category,
+    article_id: item.article_id,
+  }));
+
+  if (topStories.length > 0) {
+    return cleanStructuredDigest({
+      title: '今日精选阅读',
+      lead: topStories[0]?.summary || '',
+      top_stories: topStories,
+      quick_reads: quickReads,
+      keywords: digest.statistics?.top_keywords || digest.trending_keywords || [],
+    });
+  }
+
   const content = digest.full_content || '';
   const sections: Array<{ title: string; items: string[] }> = [];
+  const items: Array<{ title: string; summary: string }> = [];
   let current: { title: string; items: string[] } | null = null;
 
   for (const rawLine of content.split('\n')) {
@@ -124,17 +160,25 @@ function digestPosterSections(digest: DailyDigest) {
 
   if (current && current.items.length > 0) sections.push(current);
 
-  if (sections.length > 0) return sections.filter((section) => section.items.length > 0);
-
-  const headlines = (digest.headlines || []) as DigestHeadline[];
-  if (headlines.length > 0) {
-    return [{
-      title: '今日要闻',
-      items: headlines.slice(0, 12).map((item) => `${item.title}${item.summary ? `：${item.summary}` : ''}`),
-    }];
+  if (sections.length > 0) {
+    for (const section of sections) {
+      for (const item of section.items) {
+        items.push({ title: section.title, summary: item });
+      }
+    }
   }
 
-  return [{ title: '今日简报', items: ['暂无可展示的每日新闻简报内容。'] }];
+  return cleanStructuredDigest({
+    title: '今日精选阅读',
+    lead: items[0]?.summary || '暂无可展示的每日新闻简报内容。',
+    top_stories: items.slice(0, 3).map((item) => ({
+      title: item.title,
+      summary: item.summary,
+      why_it_matters: '这是今天值得快速了解的一条资讯。',
+    })),
+    quick_reads: items.slice(3, 8),
+    keywords: digest.statistics?.top_keywords || digest.trending_keywords || [],
+  });
 }
 
 const LANGS = [
@@ -161,9 +205,9 @@ function DigestPoster({
   displayDate: string;
   posterRef?: RefObject<HTMLDivElement | null>;
 }) {
-  const sections = digestPosterSections(digest);
+  const posterDigest = structuredPosterDigest(digest);
   const stats = digest.statistics;
-  const keywords = ((stats?.top_keywords || digest.trending_keywords || []) as string[]).slice(0, 5);
+  const keywords = (posterDigest.keywords.length > 0 ? posterDigest.keywords : ((stats?.top_keywords || digest.trending_keywords || []) as string[])).slice(0, 5);
   const categoryNames = Object.keys(categories).slice(0, 4);
 
   return (
@@ -196,10 +240,10 @@ function DigestPoster({
               一念三千
             </div>
             <div className="mt-2 text-4xl font-black leading-none" style={{ color: '#111' }}>
-              Daily Digest
+              精选阅读
             </div>
             <div className="mt-2 text-sm font-semibold" style={{ color: '#7a5c32' }}>
-              {displayDate} 每日新闻简报
+              {displayDate} · {posterDigest.title}
             </div>
           </div>
           <div
@@ -210,24 +254,33 @@ function DigestPoster({
           </div>
         </div>
 
+        {posterDigest.lead && (
+          <div
+            className="mb-5 rounded-2xl px-4 py-3 text-[15px] font-semibold leading-relaxed"
+            style={{ background: '#eee7dc', color: '#201b15', border: '1px solid rgba(101,79,52,0.12)' }}
+          >
+            {posterDigest.lead}
+          </div>
+        )}
+
         <div className="space-y-5">
-          {sections.map((section, sectionIndex) => (
-            <section key={`${section.title}-${sectionIndex}`}>
+          {posterDigest.top_stories.length > 0 && (
+            <section>
               <div className="mb-2 flex items-center gap-2">
                 <span
                   className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black"
                   style={{ background: '#2f7b55', color: '#fff' }}
                 >
-                  {String(sectionIndex + 1).padStart(2, '0')}
+                  01
                 </span>
                 <h3 className="text-xl font-black leading-tight" style={{ color: '#171410' }}>
-                  {section.title}
+                  今日最重要的 3 条
                 </h3>
               </div>
               <ul className="space-y-2">
-                {section.items.map((item, itemIndex) => (
+                {posterDigest.top_stories.slice(0, 3).map((item, itemIndex) => (
                   <li
-                    key={`${section.title}-${itemIndex}`}
+                    key={`${item.title}-${itemIndex}`}
                     className="rounded-xl px-4 py-3 text-[15px] font-semibold leading-relaxed"
                     style={{
                       background: itemIndex === 0 ? '#eee7dc' : 'rgba(255,255,255,0.46)',
@@ -235,12 +288,46 @@ function DigestPoster({
                       border: '1px solid rgba(101,79,52,0.12)',
                     }}
                   >
-                    {item}
+                    <div>{cleanDigestText(item.title, { maxChars: 58 })}</div>
+                    <div className="mt-1 text-[13px] font-medium" style={{ color: '#6f604d' }}>
+                      {cleanDigestText(item.why_it_matters || item.summary, { title: item.title, maxChars: 78 })}
+                    </div>
                   </li>
                 ))}
               </ul>
             </section>
-          ))}
+          )}
+
+          {posterDigest.quick_reads.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center gap-2">
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black"
+                  style={{ background: '#2f7b55', color: '#fff' }}
+                >
+                  02
+                </span>
+                <h3 className="text-xl font-black leading-tight" style={{ color: '#171410' }}>
+                  快速浏览
+                </h3>
+              </div>
+              <ul className="space-y-2">
+                {posterDigest.quick_reads.slice(0, 5).map((item, itemIndex) => (
+                  <li
+                    key={`${item.title}-${itemIndex}`}
+                    className="rounded-xl px-4 py-3 text-[14px] font-semibold leading-relaxed"
+                    style={{
+                      background: 'rgba(255,255,255,0.46)',
+                      color: '#201b15',
+                      border: '1px solid rgba(101,79,52,0.12)',
+                    }}
+                  >
+                    {cleanDigestText(`${item.title}：${item.summary}`, { title: item.title, maxChars: 90 })}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
 
         <div
@@ -250,7 +337,7 @@ function DigestPoster({
             color: '#f4ead9',
           }}
         >
-          <span>{stats?.total_articles || sections.reduce((sum, section) => sum + section.items.length, 0)} 条资讯</span>
+          <span>{stats?.total_articles || (posterDigest.top_stories.length + posterDigest.quick_reads.length)} 条资讯</span>
           <span style={{ color: '#d8af63' }}> · </span>
           <span>{stats?.source_count || categoryNames.length || 1} 个信息源</span>
           {keywords.length > 0 && (
