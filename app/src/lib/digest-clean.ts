@@ -140,7 +140,25 @@ export function cleanDigestMarkdown(input: string | null | undefined): string {
     .split('\n')
     .map((line) => cleanDigestText(line, { maxChars: 260 }))
     .filter(Boolean);
-  return lines.join('\n');
+
+  const deduped: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i];
+    const next = lines[i + 1] || '';
+    const normalizedCurrent = normalizeComparable(current);
+    const normalizedNext = normalizeComparable(next);
+    if (
+      normalizedCurrent &&
+      normalizedNext.startsWith(normalizedCurrent) &&
+      next.length > current.length &&
+      /^[:：—-]/.test(next.slice(current.length).trim())
+    ) {
+      continue;
+    }
+    deduped.push(current);
+  }
+
+  return deduped.join('\n');
 }
 
 export function cleanDigestStory(story: Partial<DigestStory>): DigestStory {
