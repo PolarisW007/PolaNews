@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, type RefObject } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toPng } from 'html-to-image';
 import {
@@ -83,6 +83,60 @@ function inlineFormat(s: string): string {
     .replace(/`(.+?)`/g, '<code style="background:var(--bg-secondary);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.85em">$1</code>');
 }
 
+function plainDigestLine(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^[-*]\s+/, '')
+    .replace(/^\d+[.)、]\s*/, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .trim();
+}
+
+function digestPosterSections(digest: DailyDigest) {
+  const content = digest.full_content || '';
+  const sections: Array<{ title: string; items: string[] }> = [];
+  let current: { title: string; items: string[] } | null = null;
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || /^---+$/.test(line)) continue;
+
+    const heading = line.match(/^#{1,3}\s+(.+)/);
+    if (heading) {
+      if (current && current.items.length > 0) sections.push(current);
+      current = { title: plainDigestLine(heading[1]), items: [] };
+      continue;
+    }
+
+    const listItem = line.match(/^(?:[-*]|\d+[.)、])\s+(.+)/);
+    const text = plainDigestLine(line);
+    if (!text || /^Daily Digest/i.test(text)) continue;
+    if (!current) current = { title: '今日速览', items: [] };
+    if (listItem || current.items.length === 0) {
+      current.items.push(plainDigestLine(listItem?.[1] || line));
+    } else {
+      const lastIndex = current.items.length - 1;
+      current.items[lastIndex] = `${current.items[lastIndex]} ${text}`;
+    }
+  }
+
+  if (current && current.items.length > 0) sections.push(current);
+
+  if (sections.length > 0) return sections.filter((section) => section.items.length > 0);
+
+  const headlines = (digest.headlines || []) as DigestHeadline[];
+  if (headlines.length > 0) {
+    return [{
+      title: '今日要闻',
+      items: headlines.slice(0, 12).map((item) => `${item.title}${item.summary ? `：${item.summary}` : ''}`),
+    }];
+  }
+
+  return [{ title: '今日简报', items: ['暂无可展示的每日新闻简报内容。'] }];
+}
+
 const LANGS = [
   { key: 'zh', label: '中' },
   { key: 'en', label: 'EN' },
@@ -98,128 +152,118 @@ function downloadDataUrl(dataUrl: string, filename: string) {
 
 function DigestPoster({
   digest,
-  headlines,
   categories,
   displayDate,
+  posterRef,
 }: {
   digest: DailyDigest;
-  headlines: DigestHeadline[];
   categories: Record<string, DigestCategorySummary>;
   displayDate: string;
+  posterRef?: RefObject<HTMLDivElement | null>;
 }) {
-  const posterItems = headlines.length > 0
-    ? headlines.slice(0, 8)
-    : Object.values(categories)
-        .flatMap((cat) => cat.items || [])
-        .slice(0, 8)
-        .map((item) => ({ ...item, importance: 'normal', category: 'Digest' } as DigestHeadline));
+  const sections = digestPosterSections(digest);
   const stats = digest.statistics;
   const keywords = ((stats?.top_keywords || digest.trending_keywords || []) as string[]).slice(0, 5);
   const categoryNames = Object.keys(categories).slice(0, 4);
 
   return (
     <div
-      className="relative overflow-hidden rounded-[28px] p-6"
+      ref={posterRef}
+      className="relative overflow-hidden p-8"
       style={{
-        width: 760,
-        minHeight: 1180,
-        background: 'linear-gradient(180deg, #041424 0%, #06111f 48%, #030912 100%)',
-        color: '#f7fbff',
-        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        width: 520,
+        minWidth: 520,
+        maxWidth: 520,
+        boxSizing: 'border-box',
+        background: '#f6f0e6',
+        color: '#171410',
+        fontFamily: '"Noto Serif SC", "Songti SC", "SimSun", serif',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.28)',
       }}
     >
       <div
-        className="absolute inset-0 opacity-70"
+        className="absolute inset-0 opacity-45"
         style={{
           background:
-            'radial-gradient(circle at 15% 10%, rgba(25, 255, 213, 0.24), transparent 28%), radial-gradient(circle at 92% 8%, rgba(255, 199, 100, 0.18), transparent 26%), linear-gradient(90deg, rgba(79, 228, 224, 0.09) 1px, transparent 1px), linear-gradient(0deg, rgba(79, 228, 224, 0.07) 1px, transparent 1px)',
-          backgroundSize: 'auto, auto, 48px 48px, 48px 48px',
+            'linear-gradient(90deg, rgba(110,72,36,0.05) 1px, transparent 1px), linear-gradient(0deg, rgba(110,72,36,0.04) 1px, transparent 1px), radial-gradient(circle at 8% 3%, rgba(206,168,105,0.28), transparent 20%)',
+          backgroundSize: '24px 24px, 24px 24px, auto',
         }}
       />
       <div className="relative">
-        <div className="mb-8 flex items-center justify-center">
+        <div className="mb-6 flex items-start justify-between border-b pb-4" style={{ borderColor: '#ded2c0' }}>
+          <div>
+            <div className="text-xs font-semibold tracking-[0.26em]" style={{ color: '#7a5c32' }}>
+              一念三千
+            </div>
+            <div className="mt-2 text-4xl font-black leading-none" style={{ color: '#111' }}>
+              Daily Digest
+            </div>
+            <div className="mt-2 text-sm font-semibold" style={{ color: '#7a5c32' }}>
+              {displayDate} 每日新闻简报
+            </div>
+          </div>
           <div
-            className="rounded-2xl px-5 py-2 text-3xl font-black tracking-[0.18em]"
-            style={{ color: '#57ffe4', textShadow: '0 0 22px rgba(87,255,228,0.45)' }}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-black"
+            style={{ background: '#111', color: '#f6f0e6' }}
           >
-            一念三千
+            AI
           </div>
         </div>
 
-        <div className="mb-9 text-center">
-          <div
-            className="text-6xl font-black leading-tight"
-            style={{ color: '#f3c96f', textShadow: '0 3px 0 #6e5228, 0 0 26px rgba(243,201,111,0.42)' }}
-          >
-            {displayDate}
-          </div>
-          <div
-            className="mt-3 text-5xl font-black leading-tight"
-            style={{ color: '#f7d98b', textShadow: '0 3px 0 #5e4725, 0 0 18px rgba(247,217,139,0.35)' }}
-          >
-            全球资讯 AI 速览
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {posterItems.map((item, index) => {
-            const accent = index % 3 === 0 ? '#6fffea' : index % 3 === 1 ? '#66d8ff' : '#ffe09a';
-            return (
-              <div
-                key={`${item.title}-${index}`}
-                className="relative grid items-center gap-5 overflow-hidden rounded-2xl px-5 py-4"
-                style={{
-                  gridTemplateColumns: '130px 1fr',
-                  background: 'linear-gradient(90deg, rgba(15, 82, 86, 0.82), rgba(24, 26, 49, 0.92))',
-                  border: '1px solid rgba(119,255,240,0.45)',
-                  boxShadow: '0 0 18px rgba(57,255,226,0.14), inset 0 0 26px rgba(255,255,255,0.04)',
-                }}
-              >
-                <div
-                  className="absolute right-4 top-3 h-2 w-32 rounded-full"
-                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,217,140,0.86))' }}
-                />
-                <div className="flex h-28 w-28 items-center justify-center rounded-2xl text-5xl font-black"
-                  style={{
-                    color: accent,
-                    background: 'rgba(0,0,0,0.22)',
-                    border: '1px solid rgba(130,255,242,0.24)',
-                  }}
+        <div className="space-y-5">
+          {sections.map((section, sectionIndex) => (
+            <section key={`${section.title}-${sectionIndex}`}>
+              <div className="mb-2 flex items-center gap-2">
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black"
+                  style={{ background: '#2f7b55', color: '#fff' }}
                 >
-                  {String(index + 1).padStart(2, '0')}
-                </div>
-                <div className="min-w-0">
-                  <div className="mb-1 flex items-center gap-3">
-                    <h3 className="truncate text-4xl font-black leading-tight" style={{ color: accent }}>
-                      {item.title}
-                    </h3>
-                  </div>
-                  <p className="line-clamp-2 text-2xl font-bold leading-snug" style={{ color: '#f2f6f3' }}>
-                    {item.summary || item.category || '今日重点资讯'}
-                  </p>
-                </div>
+                  {String(sectionIndex + 1).padStart(2, '0')}
+                </span>
+                <h3 className="text-xl font-black leading-tight" style={{ color: '#171410' }}>
+                  {section.title}
+                </h3>
               </div>
-            );
-          })}
+              <ul className="space-y-2">
+                {section.items.map((item, itemIndex) => (
+                  <li
+                    key={`${section.title}-${itemIndex}`}
+                    className="rounded-xl px-4 py-3 text-[15px] font-semibold leading-relaxed"
+                    style={{
+                      background: itemIndex === 0 ? '#eee7dc' : 'rgba(255,255,255,0.46)',
+                      color: '#201b15',
+                      border: '1px solid rgba(101,79,52,0.12)',
+                    }}
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
         </div>
 
         <div
-          className="mt-8 rounded-2xl px-7 py-5 text-center text-3xl font-black leading-snug"
+          className="mt-7 rounded-2xl px-5 py-4 text-center text-sm font-black leading-relaxed"
           style={{
-            background: 'linear-gradient(90deg, rgba(6, 40, 57, 0.92), rgba(15, 32, 51, 0.92))',
-            border: '1px solid rgba(91,255,229,0.28)',
-            color: '#f4f7f2',
+            background: '#16120d',
+            color: '#f4ead9',
           }}
         >
-          <span>{stats?.total_articles || posterItems.length} 条资讯</span>
-          <span style={{ color: '#f3c96f' }}> · </span>
+          <span>{stats?.total_articles || sections.reduce((sum, section) => sum + section.items.length, 0)} 条资讯</span>
+          <span style={{ color: '#d8af63' }}> · </span>
           <span>{stats?.source_count || categoryNames.length || 1} 个信息源</span>
           {keywords.length > 0 && (
             <>
-              <span style={{ color: '#f3c96f' }}> · </span>
+              <span style={{ color: '#d8af63' }}> · </span>
               <span>{keywords.join(' / ')}</span>
             </>
           )}
+        </div>
+
+        <div className="mt-6 flex items-center justify-between border-t pt-4 text-[11px]" style={{ borderColor: '#ded2c0', color: '#786852' }}>
+          <span>WorldOverview</span>
+          <span>全球资讯 AI 聚合</span>
         </div>
       </div>
     </div>
@@ -296,17 +340,48 @@ export default function DigestDetailPage() {
   const handleExportPoster = async () => {
     if (!digest || !posterRef.current) return;
     setPosterExporting(true);
+    let clone: HTMLElement | null = null;
     try {
-      const dataUrl = await toPng(posterRef.current, {
+      const node = posterRef.current;
+      const width = node.scrollWidth;
+      const height = node.scrollHeight;
+      clone = node.cloneNode(true) as HTMLElement;
+      Object.assign(clone.style, {
+        position: 'fixed',
+        left: '0',
+        top: '0',
+        width: `${width}px`,
+        height: `${height}px`,
+        minWidth: `${width}px`,
+        maxWidth: `${width}px`,
+        margin: '0',
+        transform: 'none',
+        zIndex: '-1',
+      });
+      document.body.appendChild(clone);
+
+      const dataUrl = await toPng(clone, {
         cacheBust: true,
         pixelRatio: 2,
-        backgroundColor: '#041424',
+        width,
+        height,
+        canvasWidth: width * 2,
+        canvasHeight: height * 2,
+        backgroundColor: '#f6f0e6',
+        style: {
+          width: `${width}px`,
+          height: `${height}px`,
+          margin: '0',
+          maxWidth: 'none',
+          transform: 'none',
+        },
       });
       downloadDataUrl(dataUrl, `digest-poster-${date || digest.digest_date}.png`);
       toast('Digest 海报已生成', 'success');
     } catch (e) {
       toast(e instanceof Error ? e.message : '生成海报失败', 'error');
     } finally {
+      clone?.remove();
       setPosterExporting(false);
     }
   };
@@ -544,16 +619,17 @@ export default function DigestDetailPage() {
               下载 PNG
             </button>
           </div>
-          <div className="overflow-x-auto rounded-xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}>
-            <div className="origin-top-left" style={{ transform: 'scale(0.5)', transformOrigin: 'top left', width: 760, height: 1180, marginBottom: -590 }}>
-              <div ref={posterRef}>
-                <DigestPoster
-                  digest={digest}
-                  headlines={headlines as DigestHeadline[]}
-                  categories={categories as Record<string, DigestCategorySummary>}
-                  displayDate={date || digest.digest_date}
-                />
-              </div>
+          <div
+            className="overflow-x-auto rounded-xl border p-4 sm:p-6"
+            style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}
+          >
+            <div className="mx-auto w-fit">
+              <DigestPoster
+                digest={digest}
+                categories={categories as Record<string, DigestCategorySummary>}
+                displayDate={date || digest.digest_date}
+                posterRef={posterRef}
+              />
             </div>
           </div>
         </section>

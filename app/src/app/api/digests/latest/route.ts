@@ -53,7 +53,12 @@ export async function GET(req: NextRequest) {
 
     const cacheKey = `${lang}:${date || 'latest'}`;
     const cached = getDigestCache(cacheKey);
-    if (cached && Date.now() - cached.ts < DIGEST_CACHE_TTL) {
+    const cachedData = cached?.data as { digest_date?: string } | null | undefined;
+    if (
+      cached &&
+      Date.now() - cached.ts < DIGEST_CACHE_TTL &&
+      (!date || cachedData?.digest_date === date)
+    ) {
       return NextResponse.json(
         { success: true, data: cached.data },
         { headers: { 'Cache-Control': 'public, max-age=120, stale-while-revalidate=300' } },
@@ -63,12 +68,12 @@ export async function GET(req: NextRequest) {
     let row: Record<string, unknown> | null = null;
     if (date) {
       row = await queryOne(
-        'SELECT * FROM daily_digests WHERE digest_date = $1 AND language = $2 LIMIT 1',
+        'SELECT * FROM daily_digests WHERE digest_date = $1 AND language = $2 ORDER BY created_at DESC LIMIT 1',
         [date, lang]
       ) as Record<string, unknown> | null;
       if (!row) {
         row = await queryOne(
-          'SELECT * FROM daily_digests WHERE digest_date = $1 LIMIT 1',
+          'SELECT * FROM daily_digests WHERE digest_date = $1 ORDER BY created_at DESC LIMIT 1',
           [date]
         ) as Record<string, unknown> | null;
       }
