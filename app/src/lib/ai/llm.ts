@@ -2,7 +2,8 @@ const API_KEY = process.env.LLM_API_KEY || '';
 const API_BASE = process.env.LLM_API_BASE || 'https://api.openai.com/v1';
 const MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 
-const MOCK_MODE = !API_KEY;
+const ALLOW_MOCK_MODE = process.env.NODE_ENV !== 'production' || process.env.LLM_ALLOW_MOCK === 'true';
+const MOCK_MODE = !API_KEY && ALLOW_MOCK_MODE;
 
 export interface ClassifyResult {
   topic: string;
@@ -24,6 +25,10 @@ export async function callLLM(
 ): Promise<string> {
   if (MOCK_MODE) {
     return generateMockResponse(prompt, systemPrompt || '');
+  }
+
+  if (!API_KEY) {
+    throw new Error('LLM_API_KEY is not configured; refusing to generate mock AI content in production');
   }
 
   const messages: ChatMessage[] = [];
@@ -400,7 +405,7 @@ export function extractJsonArray(text: string): unknown[] {
   const first = t.indexOf('[');
   const last = t.lastIndexOf(']');
   if (first === -1 || last === -1 || last <= first) return [];
-  let body = t.slice(first, last + 1);
+  const body = t.slice(first, last + 1);
   try {
     return JSON.parse(body) as unknown[];
   } catch { /* fall through */ }
