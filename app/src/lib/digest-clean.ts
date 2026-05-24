@@ -43,6 +43,10 @@ const BLOCKED_TERMS = [
   'Comments URL',
 ];
 
+function hasBlockedTerm(text: string): boolean {
+  return BLOCKED_TERMS.some((term) => text.includes(term));
+}
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -186,6 +190,7 @@ export function cleanStructuredDigest(input: Partial<StructuredDigest>): Structu
     keywords: (Array.isArray(input.keywords) ? input.keywords : [])
       .map((kw) => cleanDigestText(String(kw), { maxChars: 12 }))
       .filter(Boolean)
+      .filter((kw) => !hasBlockedTerm(kw))
       .slice(0, 6),
   };
 }
@@ -197,6 +202,7 @@ export function validateStructuredDigestQuality(digest: StructuredDigest): Diges
     digest.lead,
     ...digest.top_stories.flatMap((s) => [s.title, s.summary, s.why_it_matters || '']),
     ...digest.quick_reads.flatMap((s) => [s.title, s.summary]),
+    ...digest.keywords,
   ].join('\n');
 
   for (const term of BLOCKED_TERMS) {

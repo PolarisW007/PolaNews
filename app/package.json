@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "cli": "node ./bin/polanews.mjs"
+    "cli": "node ./bin/polanews.mjs",
+    "harness:digest": "node --experimental-strip-types scripts/harness-digest-clean.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

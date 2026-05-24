@@ -122,9 +122,12 @@ export async function GET(req: NextRequest) {
     const data = row ? rowToDigest(row) : null;
     setDigestCache(cacheKey, data);
 
+    const cacheControl = date
+      ? 'no-store'
+      : 'public, max-age=120, stale-while-revalidate=300';
     return NextResponse.json(
       { success: true, data },
-      { headers: { 'Cache-Control': 'public, max-age=120, stale-while-revalidate=300' } },
+      { headers: { 'Cache-Control': cacheControl } },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';
