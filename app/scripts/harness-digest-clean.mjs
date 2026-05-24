@@ -100,6 +100,7 @@ function runLocalHarness() {
 }
 
 async function runRemoteHarness(url) {
+  const expectedDate = new URL(url).searchParams.get('date');
   const res = await fetch(url, { cache: 'no-store' });
   assert.equal(res.ok, true, `remote HTTP ${res.status}`);
   const json = await res.json();
@@ -111,6 +112,10 @@ async function runRemoteHarness(url) {
   assertCleanText('remote digest', corpus);
   assert.ok(storyCount >= 6 && storyCount <= 8, `remote storyCount out of range: ${storyCount}`);
   assertNoDuplicateTitleLines('remote full_content', data.full_content || '');
+  if (expectedDate) {
+    assert.equal(data.digest_date, expectedDate, `remote digest date should match ${expectedDate}`);
+    assert.equal(res.headers.get('cache-control'), 'no-store', 'dated digest API should not be cached');
+  }
 
   const stories = [...(structured.top_stories || []), ...(structured.quick_reads || [])];
   for (const story of stories) {
@@ -130,7 +135,10 @@ async function runRemoteHarness(url) {
 async function main() {
   const args = new Map();
   for (const arg of process.argv.slice(2)) {
-    const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
+    const normalized = arg.replace(/^--/, '');
+    const eqIndex = normalized.indexOf('=');
+    const key = eqIndex >= 0 ? normalized.slice(0, eqIndex) : normalized;
+    const value = eqIndex >= 0 ? normalized.slice(eqIndex + 1) : 'true';
     args.set(key, value);
   }
 
