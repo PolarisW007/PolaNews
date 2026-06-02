@@ -4,6 +4,7 @@ import {
   cleanDigestMarkdown,
   cleanDigestText,
   cleanStructuredDigest,
+  buildDigestShareBrief,
   validateStructuredDigestQuality,
 } from '../src/lib/digest-clean.ts';
 
@@ -90,6 +91,31 @@ function runLocalHarness() {
   assert.equal(structured.quick_reads.length, 5);
   assert.equal(quality.ok, true, `structured quality failed: ${quality.violations.join(', ')}`);
   assertCleanText('structured digest', JSON.stringify(structured));
+
+  const shareBrief = buildDigestShareBrief({
+    structured,
+    full_content: [
+      dirty,
+      '这是一段很长的 full_content，不应被完整搬运到分享海报生成源内容。',
+      '第 2 行',
+      '第 3 行',
+      '第 4 行',
+      '第 5 行',
+      '第 6 行',
+      '第 7 行',
+      '第 8 行',
+      '第 9 行',
+      '第 10 行',
+    ].join('\n'),
+  });
+  assertCleanText('share brief', shareBrief);
+  assert.equal(shareBrief.includes('full_content，不应被完整搬运'), false, 'share brief should prefer structured digest');
+
+  const fallbackBrief = buildDigestShareBrief({
+    full_content: Array.from({ length: 12 }, (_, i) => `[general] 第 ${i + 1} 行：欢迎关注公众号，更多精彩内容。`).join('\n'),
+  });
+  assertCleanText('fallback share brief', fallbackBrief);
+  assert.ok(fallbackBrief.split('\n').length <= 8, 'fallback share brief should be capped');
 
   return {
     local: 'pass',

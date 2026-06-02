@@ -219,3 +219,28 @@ export function validateStructuredDigestQuality(digest: StructuredDigest): Diges
 
   return { ok: violations.length === 0, violations };
 }
+
+export function buildDigestShareBrief(input: {
+  structured?: Partial<StructuredDigest> | null;
+  full_content?: string | null;
+  maxLines?: number;
+}): string {
+  const structured = input.structured ? cleanStructuredDigest(input.structured) : null;
+  if (structured && (structured.top_stories.length > 0 || structured.quick_reads.length > 0)) {
+    const lines = [
+      structured.title,
+      structured.lead,
+      ...structured.top_stories.map((item) => `${item.title}：${item.why_it_matters || item.summary}`),
+      ...structured.quick_reads.map((item) => `${item.title}：${item.summary}`),
+    ];
+    return lines.map((line) => cleanDigestText(line, { maxChars: 120 })).filter(Boolean).join('\n');
+  }
+
+  const maxLines = input.maxLines ?? 8;
+  return cleanDigestMarkdown(input.full_content || '')
+    .split('\n')
+    .map((line) => cleanDigestText(line, { maxChars: 120 }))
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .join('\n');
+}

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { queryOne, execute } from '@/lib/db/schema';
 import { getCurrentUser } from '@/lib/auth';
 import { callLLM, generateImagePrompt, generateImage, downloadAndSaveImage } from '@/lib/ai/llm';
-import { cleanDigestMarkdown, cleanDigestText, cleanStructuredDigest, type StructuredDigest } from '@/lib/digest-clean';
+import { buildDigestShareBrief, type StructuredDigest } from '@/lib/digest-clean';
 import { parseJsonField } from '@/lib/db/helpers';
 
 const PLATFORM_PROMPTS: Record<string, string> = {
@@ -132,20 +132,10 @@ export async function POST(req: NextRequest) {
       }
       sourceTitle = `${digest.digest_date} 每日摘要`;
       const statistics = parseJsonField<{ structured_digest?: StructuredDigest }>(digest.statistics, {});
-      const structured = statistics.structured_digest
-        ? cleanStructuredDigest(statistics.structured_digest)
-        : null;
-      if (structured && (structured.top_stories.length > 0 || structured.quick_reads.length > 0)) {
-        const lines = [
-          structured.title,
-          structured.lead,
-          ...structured.top_stories.map((item) => `${item.title}：${item.why_it_matters || item.summary}`),
-          ...structured.quick_reads.map((item) => `${item.title}：${item.summary}`),
-        ];
-        sourceContent = lines.map((line) => cleanDigestText(line, { maxChars: 120 })).filter(Boolean).join('\n');
-      } else {
-        sourceContent = cleanDigestMarkdown((digest.full_content as string) || '');
-      }
+      sourceContent = buildDigestShareBrief({
+        structured: statistics.structured_digest,
+        full_content: (digest.full_content as string) || '',
+      });
     }
 
     let generatedContent = '';
