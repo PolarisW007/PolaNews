@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "cli": "node ./bin/polanews.mjs",
-    "harness:digest": "node --experimental-strip-types scripts/harness-digest-clean.mjs"
+    "harness:digest": "node --experimental-strip-types scripts/harness-digest-clean.mjs",
+    "harness:feeds": "node scripts/harness-feeds.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
