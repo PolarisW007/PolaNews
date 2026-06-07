@@ -9,10 +9,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "deploy:doctor": "node scripts/polanews_deploy_doctor.mjs",
     "lint": "eslint",
     "cli": "node ./bin/polanews.mjs",
     "harness:digest": "node --experimental-strip-types scripts/harness-digest-clean.mjs",
-    "harness:feeds": "node scripts/harness-feeds.mjs"
+    "harness:feeds": "node scripts/harness-feeds.mjs",
+    "migrate:audio": "node scripts/migrate-audio-runtime.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

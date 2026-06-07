@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { hashSpeechText, synthesizeAudio } from '@/lib/services/tts';
+import { audioFileExists, hashSpeechText, synthesizeAudio } from '@/lib/services/tts';
 import { queryOne, execute } from '@/lib/db/schema';
-
-const AUDIO_DIR = join(process.cwd(), 'data', 'audio');
 
 function audioColFor(lang: string): 'audio_url' | 'audio_url_en' | 'audio_url_ja' {
   if (lang === 'en') return 'audio_url_en';
@@ -63,7 +59,7 @@ export async function POST(req: NextRequest) {
         const cachedUrl = row?.url || '';
         if (cachedUrl && row?.hash === textHash) {
           const fname = fileFromUrl(cachedUrl);
-          if (fname && existsSync(join(AUDIO_DIR, fname))) {
+          if (fname && audioFileExists(fname)) {
             return NextResponse.json({
               success: true,
               data: { url: cachedUrl, filename: fname, cached: true, text_hash: textHash },

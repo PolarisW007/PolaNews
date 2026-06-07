@@ -51,6 +51,7 @@ data/*.db-wal
 data/*.db-shm
 app/data/audio/*
 !app/data/audio/.gitkeep
+.polanews-runtime/
 
 # local agent/tooling caches
 .qoder/

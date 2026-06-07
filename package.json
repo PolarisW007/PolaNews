@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "start": "npm --prefix app run start",
+    "deploy:doctor": "npm --prefix app run deploy:doctor",
+    "lint": "npm --prefix app run lint"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

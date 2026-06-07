@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   basePath: '/polanews',
   serverExternalPackages: ['pg', 'sharp', 'jsdom', 'bullmq', 'ioredis', 'web-push', 'nodemailer'],
+  outputFileTracingExcludes: {
+    '/*': ['./data/audio/**/*'],
+  },
   turbopack: {
     root: path.resolve(__dirname),
   },

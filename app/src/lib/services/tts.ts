@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'fs';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { execute, query, queryOne } from '../db/schema';
 import { buildArticleSpeechText } from '../article-speech';
@@ -10,7 +10,10 @@ const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.COSYVOICE
 const PREFER_EDGE_TTS = process.env.TTS_PROVIDER === 'edge' || process.env.EDGE_TTS_ENABLED === 'true';
 let cosyVoiceUnavailable = false;
 
-const AUDIO_DIR = join(process.cwd(), 'data', 'audio');
+const AUDIO_DIR = process.env.POLANEWS_AUDIO_DIR
+  ? resolve(process.env.POLANEWS_AUDIO_DIR)
+  : resolve(process.cwd(), '..', '.polanews-runtime', 'audio');
+const AUDIO_FILENAME_RE = /^[\w-]+\.mp3$/;
 
 export function hashSpeechText(text: string): string {
   return createHash('sha256').update(text.trim()).digest('hex');
@@ -20,6 +23,13 @@ function ensureAudioDir() {
   if (!existsSync(AUDIO_DIR)) {
     mkdirSync(AUDIO_DIR, { recursive: true });
   }
+}
+
+function resolveAudioFile(filename: string): string {
+  if (!AUDIO_FILENAME_RE.test(filename)) {
+    throw new Error('Invalid audio filename');
+  }
+  return join(AUDIO_DIR, filename);
 }
 
 export interface TTSVoice {
@@ -147,12 +157,20 @@ async function synthesizeEdgeTTS(
 }
 
 export function getAudioPath(filename: string): string {
-  return join(AUDIO_DIR, filename);
+  return resolveAudioFile(filename);
+}
+
+export function audioFileExists(filename: string): boolean {
+  try {
+    return existsSync(resolveAudioFile(filename));
+  } catch {
+    return false;
+  }
 }
 
 export async function readAudioFile(filename: string): Promise<Buffer | null> {
-  const filepath = join(AUDIO_DIR, filename);
   try {
+    const filepath = resolveAudioFile(filename);
     return await readFile(filepath);
   } catch {
     return null;
