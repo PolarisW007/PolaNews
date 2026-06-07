@@ -58,11 +58,22 @@
 - Old audio dir: `/opt/polanews/app/data/audio`
 - New default audio dir: `/opt/polanews/.polanews-runtime/audio`
 - Read-only precheck on 2026-06-07: old mp3 count `0`, new mp3 count `0`; no files needed copying.
-- Service precheck: `supervisorctl status polanews` returned `FATAL`, so deployment/restart verification is required after code sync.
+- Migration command: `cd /opt/polanews/app && npm run migrate:audio && npm run migrate:audio -- --apply`
+- Migration result: sourceCount `0`, missingCount `0`, copied `0`, targetCountAfter `0`.
+- Service precheck: `supervisorctl status polanews` returned `FATAL`.
+- Deployment sync: local commit `018b872` was uploaded to server with a git bundle and fast-forwarded in `/opt/polanews` because GitHub HTTPS push credentials were unavailable locally.
+- Server build: `cd /opt/polanews && npm run build && npm run deploy:doctor` passed; build log had no `data/audio` Turbopack warning.
+- Service recovery: `supervisorctl start polanews` changed service to `RUNNING`.
+- Runtime verification:
+  - `curl -I http://127.0.0.1:3456/polanews` returned `HTTP/1.1 200 OK`.
+  - `curl http://127.0.0.1:3456/polanews/api/articles?limit=1` returned JSON success.
+  - `curl -I http://aipd.me/polanews` returned `HTTP/1.1 200 OK`.
+  - `curl http://aipd.me/polanews/api/articles?limit=1` returned JSON success.
+  - `curl -I http://aipd.me/polanews/api/tts/audio/nonexistent.mp3` returned `404 Not Found`, confirming the TTS audio route is live and safely rejects missing files.
 
 ## Notes
 
 - 本轮未触碰既有脏文件 `src/app/digest/[date]/page.tsx`。
-- 不包含生产 supervisor 配置变更；生产发布需要单独确认窗口和回滚。
+- 不包含生产 supervisor 配置变更；本次通过 rebuild 生成 `.next/standalone/server.js` 并重启既有 `polanews` supervisor program 恢复服务。
 - 旧 `app/data/audio` 缓存可用 `npm run migrate:audio -- --apply` 迁移到 `.polanews-runtime/audio`；当前线上预检查为 0 个 mp3，无需复制。
 - 根目录旧 Next 构建仍不是生产目标；现已通过脚本委托避免误触该历史结构。
