@@ -37,3 +37,25 @@ cd app && PORT=3011 npm run start
 
 - `npm run start` 会启动 scheduler；本次仅短时间 smoke 后关闭。后续长时间本地验证建议设置 `POLANEWS_SCHEDULER_DISABLED=1`。
 - 全量 `npm run lint` 仍可能被历史页面规则拦截，本次使用相关文件 lint 作为门禁。
+
+## 生产验证
+
+部署版本：
+
+- GitHub / local / server commit: `a0720b8 feat: sync AIPD SSO preferences`
+- 服务器目录：`/opt/polanews`
+- 服务器原未提交热修已保存为 stash：`stash@{0}: pre-aipd-sso-sync-20260611143721`
+
+命令与结果：
+
+| 检查项 | 结果 |
+| --- | --- |
+| `cd /opt/polanews && npm run build` | PASS |
+| `cd /opt/polanews && npm run deploy:doctor` | PASS |
+| `supervisorctl restart polanews && supervisorctl status polanews` | PASS，`RUNNING pid 2362909` |
+| `HEAD http://127.0.0.1:3456/polanews` | PASS，`HTTP/1.1 200 OK` |
+| `HEAD http://aipd.me/polanews` | PASS，`HTTP/1.1 200 OK` |
+| `GET http://127.0.0.1:3456/polanews/api/articles?limit=1` | PASS，返回 JSON success |
+| `POST http://127.0.0.1:3456/polanews/api/auth/sso/aipd` 无 cookie | PASS，返回 `401 Unauthorized` 和 `织梦空间登录态无效` |
+| `cd /opt/polanews/app && npm run harness:feeds && npm run harness:digest` | PASS |
+| `cd /opt/polanews && git status --short --branch` | PASS，`main...origin/main` 无工作区改动 |
