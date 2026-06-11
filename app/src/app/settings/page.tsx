@@ -13,6 +13,9 @@ interface UserSettings {
   language: string;
   digest_language: string;
   theme: string;
+  font_family?: string;
+  font_scale?: string;
+  density?: string;
   digest_times: string[];
   followed_categories: string[];
 }

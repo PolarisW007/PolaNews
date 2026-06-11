@@ -13,6 +13,9 @@ export interface UserPreferences {
   language: 'zh' | 'en' | 'ja';
   digest_language?: 'zh' | 'en' | 'ja';
   theme: 'dark' | 'light' | 'system' | 'zhenjing' | 'aurora' | 'amber';
+  font_family?: 'system' | string;
+  font_scale?: 'normal' | string;
+  density?: 'comfortable' | string;
   digest_time: string[];
   categories: string[];
 }

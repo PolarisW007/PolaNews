@@ -64,6 +64,22 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
   const displayName = user?.display_name || user?.email || '用户';
 
   useEffect(() => {
+    if (isLoggedIn) return;
+    let cancelled = false;
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    fetch(`${basePath}/api/auth/sso/aipd`, { method: 'POST', credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (cancelled || !data?.success) return;
+        localStorage.setItem('auth_token', data.data.token);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
     if (!isLoggedIn || storedUser) return;
     let cancelled = false;
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
