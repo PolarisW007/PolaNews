@@ -76,7 +76,7 @@ function collectStories(digest) {
 async function callLLM(env, stories, date) {
   const apiKey = env.LLM_API_KEY || process.env.LLM_API_KEY || '';
   const apiBase = env.LLM_API_BASE || process.env.LLM_API_BASE || 'https://api.minimaxi.com/v1';
-  const model = env.LLM_MODEL || process.env.LLM_MODEL || 'MiniMax-M2.7';
+  const model = env.LLM_MODEL || process.env.LLM_MODEL || 'MiniMax-M3';
   if (!apiKey) return null;
 
   const articleList = stories.map((s, i) => (
