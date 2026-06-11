@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { loginUser } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
+  if (process.env.POLANEWS_LOCAL_AUTH_ENABLED !== 'true') {
+    return NextResponse.json(
+      { success: false, error: 'PolaNews 已统一使用 PolaUUH 登录' },
+      { status: 403 }
+    );
+  }
   try {
     const body = await req.json();
     const { email, password } = body;

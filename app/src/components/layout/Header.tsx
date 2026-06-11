@@ -67,7 +67,7 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
     if (isLoggedIn) return;
     let cancelled = false;
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    fetch(`${basePath}/api/auth/sso/aipd`, { method: 'POST', credentials: 'include' })
+    fetch(`${basePath}/api/auth/sso/polauuh`, { method: 'POST', credentials: 'include' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (cancelled || !data?.success) return;

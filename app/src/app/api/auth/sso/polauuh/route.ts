@@ -8,15 +8,15 @@ export async function POST(req: NextRequest) {
   try {
     const session = await checkPolauuhSession(req);
     if (!session) {
-      return NextResponse.json({ success: false, error: '织梦空间登录态无效' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'PolaUUH 登录态无效' }, { status: 401 });
     }
     if (!session.authorized) {
-      return NextResponse.json({ success: false, error: '没有 PolaNews 权限，请先在统一账号中心申请。' }, { status: 403 });
+      return NextResponse.json({ success: false, error: '没有 PolaNews 权限，请先在 PolaUUH 申请。' }, { status: 403 });
     }
 
     const profile = session.user;
     if (!profile?.email) {
-      return NextResponse.json({ success: false, error: '统一账户缺少邮箱' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'PolaUUH 账户缺少邮箱' }, { status: 400 });
     }
 
     let user = await queryOne('SELECT * FROM users WHERE email = $1', [profile.email]);
