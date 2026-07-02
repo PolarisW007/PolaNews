@@ -122,7 +122,7 @@ html {
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--user-font-family, 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }

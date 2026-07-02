@@ -38,6 +38,7 @@ const LANGUAGES = [
 ];
 
 const THEME_STORAGE_KEY = 'polanews_theme';
+const FONT_STORAGE_KEY = 'polanews_font';
 const AUTH_CHANGE_EVENT = 'polanews-auth-change';
 
 const THEMES: ThemeOption[] = [
@@ -114,6 +115,39 @@ const CATEGORIES = [
   { value: 'society', label: '社会' },
 ];
 
+const FONT_OPTIONS = [
+  {
+    value: 'system',
+    label: '系统默认',
+    family: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+  },
+  {
+    value: 'harmonyos',
+    label: 'HarmonyOS Sans',
+    family: '"HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+  },
+  {
+    value: 'nanowood',
+    label: '纳米松木黑',
+    family: '"NanoWoodHei", "PingFang SC", "Microsoft YaHei", sans-serif',
+  },
+  {
+    value: 'sourcehansans',
+    label: '思源黑体 CN',
+    family: '"Source Han Sans CN", "Noto Sans SC", "PingFang SC", sans-serif',
+  },
+  {
+    value: 'alibaba',
+    label: '阿里巴巴普惠体',
+    family: '"Alibaba PuHuiTi 3.0", "PingFang SC", "Microsoft YaHei", sans-serif',
+  },
+  {
+    value: 'vivosans',
+    label: 'vivo Sans',
+    family: '"vivo Sans", "PingFang SC", "Microsoft YaHei", sans-serif',
+  },
+];
+
 /** 立即应用主题到 document */
 function applyTheme(theme: string) {
   const root = document.documentElement;
@@ -130,6 +164,21 @@ function applyTheme(theme: string) {
   }
 }
 
+function applyFont(font: string) {
+  const root = document.documentElement;
+  const option = FONT_OPTIONS.find(item => item.value === font) || FONT_OPTIONS[0];
+  try {
+    localStorage.setItem(FONT_STORAGE_KEY, option.value);
+  } catch {
+    // Font preview should still work when storage is unavailable.
+  }
+  if (option.value === 'system') {
+    root.style.removeProperty('--user-font-family');
+  } else {
+    root.style.setProperty('--user-font-family', option.family);
+  }
+}
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<UserSettings>({
@@ -138,6 +187,7 @@ export default function SettingsPage() {
     language: 'zh',
     digest_language: 'zh',
     theme: 'dark',
+    font_family: 'system',
     digest_times: ['08:00'],
     followed_categories: [],
   });
@@ -156,9 +206,15 @@ export default function SettingsPage() {
     try {
       const data = await api.settings.get() as UserSettings;
       const storedTheme = typeof window !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : '';
-      const nextSettings = { ...data, theme: data.theme || storedTheme || 'dark' };
+      const storedFont = typeof window !== 'undefined' ? localStorage.getItem(FONT_STORAGE_KEY) : '';
+      const nextSettings = {
+        ...data,
+        theme: data.theme || storedTheme || 'dark',
+        font_family: data.font_family || storedFont || 'system',
+      };
       setSettings(nextSettings);
       applyTheme(nextSettings.theme);
+      applyFont(nextSettings.font_family || 'system');
     } catch (e) { toast(e instanceof Error ? e.message : '加载设置失败，请重试', 'error'); }
     setLoading(false);
   }, [toast]);
@@ -220,6 +276,11 @@ export default function SettingsPage() {
   const updateTheme = (theme: string) => {
     setSettings(prev => ({ ...prev, theme }));
     applyTheme(theme);
+  };
+
+  const updateFont = (font: string) => {
+    setSettings(prev => ({ ...prev, font_family: font }));
+    applyFont(font);
   };
 
   const handleChangePassword = async () => {
@@ -427,6 +488,63 @@ export default function SettingsPage() {
                         <Check size={12} />
                       </span>
                     </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* 字体选择 */}
+          <section
+            className="rounded-xl p-3 sm:p-5"
+            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+          >
+            <div className="mb-4 sm:mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Palette size={16} style={{ color: 'var(--accent)' }} />
+                <h2 className="text-xs sm:text-sm font-medium uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                  字体选择
+                </h2>
+              </div>
+              <span className="rounded-full px-2 py-1 text-[11px]" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                {FONT_OPTIONS.find(f => f.value === (settings.font_family || 'system'))?.label || '系统默认'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {FONT_OPTIONS.map(font => {
+                const active = (settings.font_family || 'system') === font.value;
+                return (
+                  <button
+                    key={font.value}
+                    type="button"
+                    onClick={() => updateFont(font.value)}
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition-all active:scale-[0.99]"
+                    style={{
+                      backgroundColor: active ? 'var(--bg-hover)' : 'var(--bg-primary)',
+                      border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                      boxShadow: active ? '0 0 0 1px var(--glow), 0 12px 34px var(--glow)' : 'none',
+                    }}
+                    aria-pressed={active}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: font.family }}>
+                        {font.label}
+                      </span>
+                      <span className="mt-1 block truncate text-xs" style={{ color: 'var(--text-secondary)', fontFamily: font.family }}>
+                        新闻 · AI · 观察
+                      </span>
+                    </span>
+                    <span
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                      style={{
+                        backgroundColor: active ? 'var(--accent)' : 'transparent',
+                        border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                        color: active ? 'var(--bg-primary)' : 'transparent',
+                      }}
+                    >
+                      <Check size={12} />
+                    </span>
                   </button>
                 );
               })}
