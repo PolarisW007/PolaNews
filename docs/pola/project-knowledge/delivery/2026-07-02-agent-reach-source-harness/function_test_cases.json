@@ -1,0 +1,112 @@
+{
+  "source_docs": [
+    "docs/pola/project-knowledge/requirements/2026-07-02-agent-reach-source-harness-requirements.md",
+    "docs/pola/project-knowledge/specs/2026-07-02-agent-reach-source-harness-prd.md",
+    "docs/pola/project-knowledge/specs/2026-07-02-agent-reach-source-harness-spec.md",
+    "docs/pola/project-knowledge/architecture/2026-07-02-agent-reach-source-harness-sdd.md"
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "name": "Source reach doctor API",
+      "source_refs": ["A2", "A5"],
+      "acceptance_ids": ["A2", "A5"],
+      "risk": "P2",
+      "unit_cases": [
+        {
+          "id": "UT-F1-001",
+          "target": "app/src/lib/source-reach/doctor.ts",
+          "scenario": "doctor returns deterministic channels without secret values",
+          "assertions": ["summary.total equals channel count", "secret env values are not included"],
+          "expected": "stable JSON report",
+          "command": "npm run build"
+        }
+      ],
+      "integration_cases": [
+        {
+          "id": "IT-F1-001",
+          "target": "app/src/app/api/source-reach/doctor/route.ts",
+          "scenario": "API returns {success,data}",
+          "assertions": ["route compiles", "response shape matches SPEC"],
+          "expected": "build succeeds",
+          "command": "npm run build"
+        }
+      ],
+      "regression_cases": []
+    },
+    {
+      "id": "F2",
+      "name": "CLI and MCP source reach bridge",
+      "source_refs": ["A3", "A7"],
+      "acceptance_ids": ["A3", "A7"],
+      "risk": "P3",
+      "unit_cases": [
+        {
+          "id": "UT-F2-001",
+          "target": "app/bin/polanews.mjs",
+          "scenario": "CLI help remains usable after command addition",
+          "assertions": ["help command exits 0"],
+          "expected": "help text prints",
+          "command": "node ./bin/polanews.mjs help"
+        }
+      ],
+      "integration_cases": [
+        {
+          "id": "IT-F2-001",
+          "target": "app/src/lib/mcp/server.ts",
+          "scenario": "MCP tool list includes source_reach_doctor",
+          "assertions": ["TypeScript build succeeds"],
+          "expected": "tool is callable from MCP handler",
+          "command": "npm run build"
+        }
+      ],
+      "regression_cases": [
+        {
+          "id": "RG-F2-001",
+          "target": "app/src/lib/mcp/server.ts",
+          "scenario": "existing MCP tool names remain present",
+          "assertions": ["fetch_feeds", "search_articles", "generate_digest"],
+          "expected": "existing tools still listed",
+          "command": "npm run build"
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "name": "Jina Reader fulltext fallback",
+      "source_refs": ["A4", "A7"],
+      "acceptance_ids": ["A4", "A7"],
+      "risk": "P2",
+      "unit_cases": [
+        {
+          "id": "UT-F3-001",
+          "target": "app/src/lib/services/readability.ts",
+          "scenario": "unsupported/private URLs are not sent to fallback",
+          "assertions": ["fallback returns null"],
+          "expected": "old behavior preserved",
+          "command": "npm run build"
+        }
+      ],
+      "integration_cases": [],
+      "regression_cases": [
+        {
+          "id": "RG-F3-001",
+          "target": "app/src/app/api/articles/[id]/fulltext/route.ts",
+          "scenario": "existing fulltext route compiles unchanged",
+          "assertions": ["GET/POST handlers still build"],
+          "expected": "build succeeds",
+          "command": "npm run build"
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {"acceptance_id": "A1", "case_ids": ["UT-F1-001"]},
+    {"acceptance_id": "A2", "case_ids": ["UT-F1-001", "IT-F1-001"]},
+    {"acceptance_id": "A3", "case_ids": ["UT-F2-001", "IT-F2-001"]},
+    {"acceptance_id": "A4", "case_ids": ["UT-F3-001", "RG-F3-001"]},
+    {"acceptance_id": "A5", "case_ids": ["UT-F1-001"]},
+    {"acceptance_id": "A6", "case_ids": ["UT-F1-001", "UT-F2-001", "UT-F3-001"]},
+    {"acceptance_id": "A7", "case_ids": ["RG-F2-001", "RG-F3-001"]}
+  ]
+}

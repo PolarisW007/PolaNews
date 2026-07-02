@@ -1,0 +1,28 @@
+{
+  "slug": "2026-07-02-agent-reach-source-harness",
+  "status": "pass",
+  "environment": "local",
+  "validated_paths": [
+    {
+      "path": "Next route registration",
+      "evidence": "npm run build included /api/source-reach/doctor"
+    },
+    {
+      "path": "CLI help compatibility",
+      "evidence": "node ./bin/polanews.mjs help exited 0 and listed source-reach doctor"
+    },
+    {
+      "path": "task-owned lint",
+      "evidence": "npx eslint on task-owned files exited 0 with no errors"
+    }
+  ],
+  "side_effects": {
+    "database_writes": "none planned for doctor",
+    "network": "only optional live probes and fulltext fallback when route is invoked",
+    "deployment": "pending; initial ssh and HTTPS prechecks timed out"
+  },
+  "risks": [
+    "Jina fallback depends on external service availability and must fail closed to old behavior."
+  ],
+  "updated_at": "2026-07-02T22:50:00+08:00"
+}

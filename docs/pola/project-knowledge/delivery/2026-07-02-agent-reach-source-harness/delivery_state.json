@@ -1,0 +1,78 @@
+{
+  "slug": "2026-07-02-agent-reach-source-harness",
+  "status": "release_requested_server_unreachable",
+  "mode": "release_requested",
+  "stages": {
+    "project_context": {
+      "status": "done",
+      "artifact_path": "docs/pola/arch-reference.md"
+    },
+    "requirement": {
+      "status": "done",
+      "artifact_path": "docs/pola/project-knowledge/requirements/2026-07-02-agent-reach-source-harness-requirements.md"
+    },
+    "prd": {
+      "status": "done",
+      "artifact_path": "docs/pola/project-knowledge/specs/2026-07-02-agent-reach-source-harness-prd.md"
+    },
+    "spec": {
+      "status": "done",
+      "artifact_path": "docs/pola/project-knowledge/specs/2026-07-02-agent-reach-source-harness-spec.md"
+    },
+    "architecture": {
+      "status": "done",
+      "artifact_path": "docs/pola/project-knowledge/architecture/2026-07-02-agent-reach-source-harness-sdd.md"
+    },
+    "implementation": {
+      "status": "done",
+      "artifact_path": "app/src/lib/source-reach/doctor.ts, app/src/app/api/source-reach/doctor/route.ts, app/src/lib/services/readability.ts, app/bin/polanews.mjs, app/src/lib/mcp/server.ts"
+    },
+    "test": {
+      "status": "passed_with_notes",
+      "evidence_path": "docs/pola/project-knowledge/delivery/2026-07-02-agent-reach-source-harness/test_matrix.json"
+    },
+    "regression": {
+      "status": "passed",
+      "evidence_path": "docs/pola/project-knowledge/delivery/2026-07-02-agent-reach-source-harness/regression_evidence.json"
+    },
+    "finalization": {
+      "status": "done",
+      "artifact_path": "docs/pola/project-knowledge/devlogs/2026-07-02-agent-reach-source-harness.md"
+    },
+    "release": {
+      "status": "precheck_blocked_server_timeout",
+      "artifact_path": "docs/pola/project-knowledge/release/2026-07-02-agent-reach-source-harness-release.md"
+    }
+  },
+  "acceptance_coverage": {
+    "A1": ["requirement", "prd", "spec", "architecture", "devlog", "delivery_state"],
+    "A2": ["implementation", "test"],
+    "A3": ["implementation", "test"],
+    "A4": ["implementation", "test"],
+    "A5": ["review", "diff_check"],
+    "A6": ["function_test_cases", "test_matrix"],
+    "A7": ["regression_evidence", "release"]
+  },
+  "dirty_worktree_ledger": {
+    "pre_existing_unrelated": [
+      "app/src/app/globals.css",
+      "app/src/app/layout.tsx",
+      "app/src/app/settings/page.tsx",
+      "src/app/digest/[date]/page.tsx",
+      "June untracked docs"
+    ],
+    "task_owned": [
+      "app/src/lib/source-reach/doctor.ts",
+      "app/src/app/api/source-reach/doctor/route.ts",
+      "app/src/lib/services/readability.ts",
+      "app/bin/polanews.mjs",
+      "app/src/lib/mcp/server.ts",
+      "docs/pola/project-knowledge/**/2026-07-02-agent-reach-source-harness*"
+    ]
+  },
+  "security_checks": {
+    "secret_scan": "passed_with_false_positive_existing_cli_option_names",
+    "diff_check": "passed",
+    "sensitive_output": "doctor reports booleans only"
+  }
+}

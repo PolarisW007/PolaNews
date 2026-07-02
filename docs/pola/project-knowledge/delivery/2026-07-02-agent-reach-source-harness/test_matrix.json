@@ -1,0 +1,41 @@
+{
+  "slug": "2026-07-02-agent-reach-source-harness",
+  "status": "pass_with_notes",
+  "commands": [
+    {
+      "workdir": "/Users/wangchang/Desktop/WSYCursorCode/PolaNews",
+      "command": "python3 /Users/wangchang/.agents/skills/pola-test-gate/scripts/validate_function_test_cases.py --prd docs/pola/project-knowledge/requirements/2026-07-02-agent-reach-source-harness-requirements.md --sdd docs/pola/project-knowledge/architecture/2026-07-02-agent-reach-source-harness-sdd.md --spec docs/pola/project-knowledge/specs/2026-07-02-agent-reach-source-harness-spec.md --cases docs/pola/project-knowledge/delivery/2026-07-02-agent-reach-source-harness/function_test_cases.json --format json",
+      "exit_code": 0,
+      "result": "pass"
+    },
+    {
+      "workdir": "/Users/wangchang/Desktop/WSYCursorCode/PolaNews/app",
+      "command": "node ./bin/polanews.mjs help",
+      "exit_code": 0,
+      "result": "help printed and includes source-reach doctor"
+    },
+    {
+      "workdir": "/Users/wangchang/Desktop/WSYCursorCode/PolaNews/app",
+      "command": "npm run build",
+      "exit_code": 0,
+      "result": "Next build passed and included /api/source-reach/doctor"
+    },
+    {
+      "workdir": "/Users/wangchang/Desktop/WSYCursorCode/PolaNews",
+      "command": "npx eslint app/src/lib/source-reach/doctor.ts app/src/app/api/source-reach/doctor/route.ts app/src/lib/services/readability.ts app/src/lib/mcp/server.ts app/bin/polanews.mjs",
+      "exit_code": 0,
+      "result": "0 errors, 2 pre-existing warnings in app/src/lib/mcp/server.ts"
+    },
+    {
+      "workdir": "/Users/wangchang/Desktop/WSYCursorCode/PolaNews/app",
+      "command": "npm run lint",
+      "exit_code": 1,
+      "result": "full lint failed on pre-existing page errors outside task-owned files"
+    }
+  ],
+  "coverage_notes": [
+    "A2/A3/A4 will be validated by build/lint and CLI help after implementation.",
+    "No live network probe is required for completion because doctor live mode is optional."
+  ],
+  "updated_at": "2026-07-02T02:00:00+08:00"
+}

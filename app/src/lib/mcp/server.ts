@@ -4,6 +4,7 @@ import { classifyArticle, summarizeArticle, generateDigestContent } from '../ai/
 import { fetchAllFeeds } from '../rss/engine';
 import { generateDailyDigest } from '../services/digest';
 import { extractTrendingKeywords } from '../services/trending';
+import { getSourceReachDoctor } from '../source-reach/doctor';
 
 export interface MCPTool {
   name: string;
@@ -51,6 +52,11 @@ export const MCP_TOOLS: MCPTool[] = [
     name: 'manage_subscription',
     description: 'List all RSS feed subscriptions',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'source_reach_doctor',
+    description: 'Check external source capability status for RSS, fulltext, GitHub, Exa and optional browser tools',
+    inputSchema: { type: 'object', properties: { live: { type: 'boolean', default: false } } },
   },
 ];
 
@@ -125,6 +131,10 @@ export async function handleToolCall(
 
     case 'manage_subscription': {
       return await query(`SELECT id, title, url, category, language, status FROM feeds ORDER BY category, title`);
+    }
+
+    case 'source_reach_doctor': {
+      return await getSourceReachDoctor({ live: args.live === true });
     }
 
     default:

@@ -241,6 +241,7 @@ Common commands:
   polanews broadcasts latest --lang zh
   polanews broadcasts generate --lang zh --voice longshu_v3
   polanews shares generate --platform xiaohongshu --article-id <articleId>
+  polanews source-reach doctor
 
 Generic API bridge:
   polanews api GET /api/articles --query limit=5
@@ -489,6 +490,16 @@ async function handleShares(runtime, subcommand, args, options) {
   throw new CliError(`Unknown shares command: ${subcommand}`);
 }
 
+async function handleSourceReach(runtime, subcommand, _args, options) {
+  if (!subcommand || subcommand === 'doctor') {
+    return request(runtime, 'GET', '/api/source-reach/doctor', {
+      query: addDefined({}, { live: options.live ? 'true' : undefined }),
+      raw: Boolean(options.raw),
+    });
+  }
+  throw new CliError(`Unknown source-reach command: ${subcommand}`);
+}
+
 async function handleMcp(runtime, subcommand, args, options) {
   if (subcommand === 'tools') return request(runtime, 'POST', '/api/mcp', { body: { method: 'tools/list' }, raw: true });
   if (subcommand === 'resources') return request(runtime, 'POST', '/api/mcp', { body: { method: 'resources/list' }, raw: true });
@@ -558,6 +569,10 @@ async function main() {
     case 'shares':
     case 'share':
       result = await handleShares(runtime, subcommand, rest, options);
+      break;
+    case 'source-reach':
+    case 'source':
+      result = await handleSourceReach(runtime, subcommand, rest, options);
       break;
     case 'mcp':
       result = await handleMcp(runtime, subcommand, rest, options);
