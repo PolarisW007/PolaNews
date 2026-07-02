@@ -1,6 +1,6 @@
 {
   "slug": "2026-07-02-agent-reach-source-harness",
-  "status": "release_requested_server_unreachable",
+  "status": "github_pushed_server_unreachable",
   "mode": "release_requested",
   "stages": {
     "project_context": {
@@ -40,7 +40,7 @@
       "artifact_path": "docs/pola/project-knowledge/devlogs/2026-07-02-agent-reach-source-harness.md"
     },
     "release": {
-      "status": "precheck_blocked_server_timeout",
+      "status": "github_pushed_deploy_blocked_server_timeout",
       "artifact_path": "docs/pola/project-knowledge/release/2026-07-02-agent-reach-source-harness-release.md"
     }
   },
@@ -74,5 +74,16 @@
     "secret_scan": "passed_with_false_positive_existing_cli_option_names",
     "diff_check": "passed",
     "sensitive_output": "doctor reports booleans only"
+  },
+  "git": {
+    "commit": "49bfa6a",
+    "remote": "origin",
+    "branch": "main",
+    "push": "done"
+  },
+  "deployment": {
+    "status": "blocked_server_unreachable",
+    "target": "pola-server:/opt/polanews",
+    "evidence": "ssh banner timeout; HTTPS request timeout; TCP 22/443 accepted"
   }
 }

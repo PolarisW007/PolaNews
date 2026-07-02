@@ -1,7 +1,7 @@
 # Release Manifest: Agent Reach Source Harness for PolaNews
 
 Date: 2026-07-02
-Status: ready for GitHub push; server deployment blocked by current server timeout
+Status: GitHub pushed; server deployment blocked by current server timeout
 
 ## Scope
 
@@ -21,6 +21,7 @@ Status: ready for GitHub push; server deployment blocked by current server timeo
 
 - Local branch: `main`.
 - Remote: `origin/main` (`git@github.com:PolarisW007/PolaNews.git`).
+- Pushed commit: `49bfa6a` (`feat: add source reach doctor`).
 - Production path: `/opt/polanews`.
 - Production service: supervisor `polanews`.
 - Production URL: `https://aipd.me/polanews`.
@@ -70,9 +71,10 @@ Rollback removes the source-reach module/route and the small CLI/MCP/readability
 
 ## Current Blocker
 
-Initial server checks on 2026-07-02 timed out:
+Initial and post-push server checks on 2026-07-02 timed out:
 
 - `ssh pola-server`: timed out during banner exchange.
 - `curl https://aipd.me/polanews`: timed out.
+- TCP ports 22 and 443 accepted connections, but user-space SSH/HTTPS did not respond.
 
 This looks like server or network unavailability, not a code/test blocker.

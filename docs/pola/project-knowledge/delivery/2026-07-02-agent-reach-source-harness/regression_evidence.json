@@ -19,7 +19,7 @@
   "side_effects": {
     "database_writes": "none planned for doctor",
     "network": "only optional live probes and fulltext fallback when route is invoked",
-    "deployment": "pending; initial ssh and HTTPS prechecks timed out"
+    "deployment": "blocked; GitHub pushed, but server ssh and HTTPS checks timed out"
   },
   "risks": [
     "Jina fallback depends on external service availability and must fail closed to old behavior."

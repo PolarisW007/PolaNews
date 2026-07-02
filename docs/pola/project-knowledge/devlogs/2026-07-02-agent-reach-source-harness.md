@@ -47,6 +47,12 @@ Repository had pre-existing unrelated dirty files before this task:
 
 This task will avoid modifying those files.
 
+Committed and pushed task-owned files:
+
+- Commit: `49bfa6a feat: add source reach doctor`
+- Remote: `origin main`
+- Push result: `fd5d821..49bfa6a main -> main`
+
 ## Changed Files
 
 - `app/src/lib/source-reach/doctor.ts`
@@ -64,7 +70,7 @@ This task will avoid modifying those files.
 
 Release manifest: `docs/pola/project-knowledge/release/2026-07-02-agent-reach-source-harness-release.md`.
 
-Server deployment is currently blocked by infrastructure reachability: `ssh pola-server` timed out during banner exchange and HTTPS to `https://aipd.me/polanews` timed out on 2026-07-02. Once the server responds, deploy by fast-forwarding `/opt/polanews` to `origin/main`, running `npm run build`, `npm run deploy:doctor`, and restarting supervisor `polanews`.
+Server deployment is currently blocked by infrastructure reachability: `ssh pola-server` timed out during banner exchange and HTTPS to `https://aipd.me/polanews` timed out on 2026-07-02. TCP ports 22 and 443 accepted connections, but user-space SSH/HTTPS did not respond. Once the server responds, deploy by fast-forwarding `/opt/polanews` to `origin/main`, running `npm run build`, `npm run deploy:doctor`, and restarting supervisor `polanews`.
 
 Rollback removes the new source-reach module and route, plus the small additions in CLI/MCP/readability.
 
