@@ -76,6 +76,21 @@ test('normal pending-audio generation is constrained to the retention cutoff', a
   assert.match(source, /promisify\(execFile\)/);
 });
 
+test('scheduler disable flag gates the startup bootstrap as well as cron tasks', async () => {
+  const source = await readFile(
+    new URL('../src/lib/rss/scheduler.ts', import.meta.url),
+    'utf8',
+  );
+  const startAll = source.slice(source.indexOf('export async function startAllSchedulers'));
+  const disabledGuard = startAll.indexOf("if (process.env.POLANEWS_SCHEDULER_DISABLED === '1')");
+  const feedSchedulerStart = startAll.indexOf('startFeedScheduler();');
+  const bootstrapStart = startAll.indexOf("runLockedFeedPipeline('bootstrap')");
+  assert.ok(disabledGuard >= 0, 'startAllSchedulers must inspect the disable flag');
+  assert.ok(disabledGuard < feedSchedulerStart, 'disable guard must run before cron startup');
+  assert.ok(disabledGuard < bootstrapStart, 'disable guard must run before bootstrap startup');
+  assert.match(startAll.slice(disabledGuard, feedSchedulerStart), /return false;/);
+});
+
 test('dry-run and apply only remove expired UUID audio and repair article references', async () => {
   const audioDir = await mkdtemp(join(tmpdir(), 'polanews-audio-retention-'));
   const now = new Date('2026-10-06T00:00:00.000Z');

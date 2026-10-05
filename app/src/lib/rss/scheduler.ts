@@ -146,8 +146,12 @@ export function startAudioRetentionScheduler(): void {
   }, { timezone: 'Asia/Shanghai' });
 }
 
-export async function startAllSchedulers(): Promise<void> {
+export async function startAllSchedulers(): Promise<boolean> {
   await initializeDatabase();
+  if (process.env.POLANEWS_SCHEDULER_DISABLED === '1') {
+    console.log('[RSS Scheduler] All schedulers and bootstrap disabled by POLANEWS_SCHEDULER_DISABLED=1');
+    return false;
+  }
   startFeedScheduler();
   startDigestScheduler();
   startAudioRetentionScheduler();
@@ -161,4 +165,5 @@ export async function startAllSchedulers(): Promise<void> {
       );
     }, 15_000);
   }
+  return true;
 }
