@@ -95,9 +95,14 @@ export async function initializeDatabase(): Promise<void> {
       etag VARCHAR(255) DEFAULT '',
       status VARCHAR(20) DEFAULT 'active',
       error_count INTEGER DEFAULT 0,
+      last_attempted_at TIMESTAMPTZ,
+      next_retry_at TIMESTAMPTZ,
       is_preset BOOLEAN DEFAULT FALSE
     )
   `);
+
+  await execute(`ALTER TABLE feeds ADD COLUMN IF NOT EXISTS last_attempted_at TIMESTAMPTZ`);
+  await execute(`ALTER TABLE feeds ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ`);
 
   await execute(`
     CREATE TABLE IF NOT EXISTS articles (
@@ -250,6 +255,7 @@ export async function initializeDatabase(): Promise<void> {
     'CREATE INDEX IF NOT EXISTS idx_social_shares_created_at ON social_shares(created_at DESC)',
     'CREATE INDEX IF NOT EXISTS idx_social_shares_platform ON social_shares(platform)',
     'CREATE INDEX IF NOT EXISTS idx_feeds_status ON feeds(status)',
+    'CREATE INDEX IF NOT EXISTS idx_feeds_retry_due ON feeds(status, next_retry_at)',
     'CREATE INDEX IF NOT EXISTS idx_feeds_category ON feeds(category)',
     'CREATE INDEX IF NOT EXISTS idx_articles_sentiment ON articles(sentiment)',
     'CREATE INDEX IF NOT EXISTS idx_articles_region ON articles(region)',

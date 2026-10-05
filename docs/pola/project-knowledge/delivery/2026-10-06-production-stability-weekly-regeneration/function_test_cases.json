@@ -1,0 +1,190 @@
+{
+  "source_docs": [
+    "docs/pola/project-knowledge/requirements/2026-10-06-production-stability-weekly-regeneration.md",
+    "docs/pola/project-knowledge/specs/2026-10-06-production-stability-weekly-regeneration-prd.md",
+    "docs/pola/project-knowledge/architecture/2026-10-06-production-stability-weekly-regeneration-sdd.md"
+  ],
+  "features": [
+    {
+      "id": "F1",
+      "name": "有界音频缓存与磁盘恢复",
+      "source_refs": ["requirements#A1", "requirements#A2", "requirements#A3"],
+      "acceptance_ids": ["A1", "A2", "A3"],
+      "risk": "P1",
+      "unit_cases": [
+        {
+          "id": "UT-F1-001",
+          "target": "app/src/lib/services/audio-retention.ts",
+          "scenario": "候选文件包含过期、近期、广播保护、非法文件名和目录逃逸",
+          "assertions": ["仅过期且未保护的 UUID MP3 被选中", "非法路径永不删除"],
+          "expected": "删除范围受目录、文件名、时间与引用四重约束",
+          "command": "cd app && npm run test:stability"
+        }
+      ],
+      "integration_cases": [
+        {
+          "id": "IT-F1-001",
+          "target": "production audio retention dry-run/apply",
+          "scenario": "生产备份后执行 dry-run 与受控清理",
+          "assertions": ["dry-run 与 apply 候选一致", "根盘释放至少 6GiB", "无文章记录删除", "无残留缺失文章音频引用"],
+          "expected": "磁盘恢复安全余量且数据库引用一致",
+          "manual_verification": "核对 manifest、SQL 聚合、df、文件数和音频 HEAD"
+        }
+      ],
+      "regression_cases": [
+        {
+          "id": "RT-F1-001",
+          "target": "/polanews/api/tts/audio/{filename}",
+          "scenario": "清理后读取近期文章和历史 Broadcast 受保护音频",
+          "assertions": ["HTTP 200", "Content-Type audio/mpeg"],
+          "expected": "核心音频入口保持可用",
+          "manual_verification": "curl HEAD 真实音频 URL"
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "name": "RSS 失败源自动恢复",
+      "source_refs": ["requirements#A4", "requirements#A12"],
+      "acceptance_ids": ["A4", "A12"],
+      "risk": "P1",
+      "unit_cases": [
+        {
+          "id": "UT-F2-001",
+          "target": "app/src/lib/rss/feed-retry.ts",
+          "scenario": "不同 error_count 计算重试延迟",
+          "assertions": ["指数退避单调增加", "不超过24小时", "成功时清零"],
+          "expected": "失败源有界重试且不形成每轮风暴",
+          "command": "cd app && npm run test:stability"
+        }
+      ],
+      "integration_cases": [
+        {
+          "id": "IT-F2-001",
+          "target": "production scheduler",
+          "scenario": "部署后到期 error 源参与一轮抓取",
+          "assertions": ["attempted 大于旧值5或出现 recovered", "失败源写入 next_retry_at", "成功源恢复 active"],
+          "expected": "52 个历史 error 源不再永久失活",
+          "manual_verification": "只读 SQL + scheduler summary"
+        }
+      ],
+      "regression_cases": []
+    },
+    {
+      "id": "F3",
+      "name": "MiniMax 隔离与近一周再生成",
+      "source_refs": ["requirements#A5", "requirements#A7", "requirements#A9"],
+      "acceptance_ids": ["A5", "A7", "A9"],
+      "risk": "P1",
+      "unit_cases": [
+        {
+          "id": "UT-F3-001",
+          "target": "app/src/lib/ai/llm.ts",
+          "scenario": "10 条翻译中一条返回 422 new_sensitive",
+          "assertions": ["批次递归拆分", "失败单条被隔离", "其它9条仍返回"],
+          "expected": "单条内容安全拒绝不拖垮整批",
+          "command": "cd app && npm run test:stability"
+        }
+      ],
+      "integration_cases": [
+        {
+          "id": "IT-F3-001",
+          "target": "POST /api/ops/maintenance",
+          "scenario": "有效 ops token 分批处理近一周摘要与音频",
+          "assertions": ["批量上限生效", "连续调用可续跑", "完成/失败数量可核验", "无 secret 响应"],
+          "expected": "近一周任务完成或留下明确 checkpoint",
+          "manual_verification": "生产 localhost 维护请求 + SQL 聚合 + checkpoint"
+        }
+      ],
+      "regression_cases": [
+        {
+          "id": "RT-F3-001",
+          "target": "latest article detail",
+          "scenario": "再生成后读取真实文章详情和音频",
+          "assertions": ["ai_summary 非空", "audio_url 非空且200"],
+          "expected": "用户能读取新摘要并播放新音频",
+          "manual_verification": "API + audio HEAD"
+        }
+      ]
+    },
+    {
+      "id": "F4",
+      "name": "Digest 日期一致性",
+      "source_refs": ["requirements#A6"],
+      "acceptance_ids": ["A6"],
+      "risk": "P2",
+      "unit_cases": [
+        {
+          "id": "UT-F4-001",
+          "target": "app/src/lib/date-only.ts",
+          "scenario": "PostgreSQL DATE 被解析为本地 Date 或 ISO 字符串",
+          "assertions": ["返回数据库日历日期", "不因UTC转换减一天"],
+          "expected": "Asia/Shanghai 日期稳定",
+          "command": "cd app && npm run test:stability"
+        }
+      ],
+      "integration_cases": [],
+      "regression_cases": [
+        {
+          "id": "RT-F4-001",
+          "target": "/api/digests and /api/digests/latest",
+          "scenario": "读取同一最新 Digest",
+          "assertions": ["两个 API 日期一致", "与数据库 digest_date 一致"],
+          "expected": "列表不再偏移一天",
+          "manual_verification": "curl + read-only SQL"
+        }
+      ]
+    },
+    {
+      "id": "F5",
+      "name": "兼容、安全与发布",
+      "source_refs": ["requirements#A8", "requirements#A10", "requirements#A11"],
+      "acceptance_ids": ["A8", "A10", "A11"],
+      "risk": "P1",
+      "unit_cases": [
+        {
+          "id": "UT-F5-001",
+          "target": "app/src/app/api/ops/maintenance/route.ts",
+          "scenario": "缺失或错误 ops token",
+          "assertions": ["请求被拒绝", "token 不出现在响应或日志"],
+          "expected": "维护写入口默认关闭并拒绝未授权请求",
+          "command": "cd app && npm run test:stability"
+        }
+      ],
+      "integration_cases": [
+        {
+          "id": "IT-F5-001",
+          "target": "production deployment",
+          "scenario": "从生产基线部署 hotfix 并验证配置",
+          "assertions": ["build/doctor通过", "Supervisor RUNNING", "PostgreSQL accepting", "配置600", "可回滚"],
+          "expected": "生产部署证据完整",
+          "manual_verification": "build、deploy doctor、supervisor、pg_isready"
+        }
+      ],
+      "regression_cases": [
+        {
+          "id": "RT-F5-001",
+          "target": "public core routes",
+          "scenario": "发布后回归首页、articles、feeds、digests、broadcast、TTS、匿名鉴权和静态资源",
+          "assertions": ["成功路径200", "匿名私有接口401", "无新增5xx/secret日志"],
+          "expected": "旧入口和安全语义保持兼容",
+          "manual_verification": "curl 矩阵 + 日志窗口"
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {"acceptance_id": "A1", "case_ids": ["IT-F1-001"]},
+    {"acceptance_id": "A2", "case_ids": ["UT-F1-001", "IT-F1-001"]},
+    {"acceptance_id": "A3", "case_ids": ["UT-F1-001", "IT-F1-001"]},
+    {"acceptance_id": "A4", "case_ids": ["UT-F2-001", "IT-F2-001"]},
+    {"acceptance_id": "A5", "case_ids": ["UT-F3-001", "IT-F3-001"]},
+    {"acceptance_id": "A6", "case_ids": ["UT-F4-001", "RT-F4-001"]},
+    {"acceptance_id": "A7", "case_ids": ["IT-F3-001", "RT-F3-001"]},
+    {"acceptance_id": "A8", "case_ids": ["RT-F5-001"]},
+    {"acceptance_id": "A9", "case_ids": ["UT-F3-001", "IT-F3-001"]},
+    {"acceptance_id": "A10", "case_ids": ["UT-F5-001", "RT-F5-001"]},
+    {"acceptance_id": "A11", "case_ids": ["IT-F5-001", "RT-F5-001"]},
+    {"acceptance_id": "A12", "case_ids": ["IT-F2-001"]}
+  ]
+}

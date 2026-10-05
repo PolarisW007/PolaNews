@@ -14,6 +14,7 @@
     "cli": "node ./bin/polanews.mjs",
     "harness:digest": "node --experimental-strip-types scripts/harness-digest-clean.mjs",
     "harness:feeds": "node scripts/harness-feeds.mjs",
+    "test:stability": "node --test --experimental-strip-types tests/stability-*.test.ts",
     "migrate:audio": "node scripts/migrate-audio-runtime.mjs"
   },
   "dependencies": {

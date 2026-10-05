@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db/schema';
-
-/** 把 PostgreSQL `date` 字段反序列化后的 JS Date 或 ISO 字符串统一归一化为 `YYYY-MM-DD`。 */
-function normalizeDate(v: unknown): string {
-  if (!v) return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  const s = String(v);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
-}
+import { normalizeDateOnly } from '@/lib/date-only';
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,7 +18,7 @@ export async function GET(req: NextRequest) {
     // 归一化 digest_date，避免前端拼 URL 时出现 "2026-05-04T16:00:00.000Z"
     const digests = rows.map((r) => ({
       ...r,
-      digest_date: normalizeDate(r.digest_date),
+      digest_date: normalizeDateOnly(r.digest_date),
     }));
 
     return NextResponse.json({

@@ -1,0 +1,28 @@
+{
+  "slug": "2026-10-06-production-stability-weekly-regeneration",
+  "status": "implementation_in_progress",
+  "risk": "P1",
+  "production_base": "6a92017b5f726159061a6d63724710fd47bacb2a",
+  "owners": {"requester": "user", "dri": "熾駒"},
+  "window": {"since": "2026-09-29T00:00:00+08:00", "until": "runtime"},
+  "artifacts": {
+    "requirement": "docs/pola/project-knowledge/requirements/2026-10-06-production-stability-weekly-regeneration.md",
+    "prd": "docs/pola/project-knowledge/specs/2026-10-06-production-stability-weekly-regeneration-prd.md",
+    "sdd": "docs/pola/project-knowledge/architecture/2026-10-06-production-stability-weekly-regeneration-sdd.md",
+    "tests": "docs/pola/project-knowledge/delivery/2026-10-06-production-stability-weekly-regeneration/function_test_cases.json",
+    "devlog": "docs/pola/project-knowledge/devlogs/2026-10-06-production-stability-weekly-regeneration.md",
+    "release": "docs/pola/project-knowledge/release/2026-10-06-production-stability-weekly-regeneration-release.md"
+  },
+  "stages": {
+    "requirement": "complete",
+    "architecture": "complete",
+    "implementation": "in_progress",
+    "review": "pending",
+    "test": "pending",
+    "regression": "pending",
+    "release": "pending",
+    "finalization": "pending"
+  },
+  "dirty_worktree": "isolated managed worktree created from exact production commit; original main dirty state untouched",
+  "blockers": []
+}

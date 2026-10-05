@@ -21,6 +21,32 @@ export interface SummarizeResult {
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
+function sanitizeLLMLogMessage(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value || 'Unknown LLM error');
+  return message
+    .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, '[REDACTED_KEY]')
+    .replace(/((?:api[_-]?key|token|authorization)\s*["']?\s*[:=]\s*["']?)[^"'\s,}]+/gi, '$1[REDACTED]')
+    .slice(0, 500);
+}
+
+function describeLLMErrorBody(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { type?: unknown; message?: unknown; http_code?: unknown };
+      type?: unknown;
+    };
+    const error = parsed.error || {};
+    return sanitizeLLMLogMessage(JSON.stringify({
+      type: error.type ?? parsed.type ?? 'provider_error',
+      message: error.message ?? 'Request failed',
+      http_code: error.http_code,
+    }));
+  } catch {
+    return 'Provider returned a non-JSON error body';
+  }
+}
+
 export async function callLLM(
   prompt: string,
   systemPrompt?: string
@@ -61,7 +87,7 @@ export async function callLLM(
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`LLM API error ${res.status}: ${errText}`);
+    throw new Error(`LLM API error ${res.status}: ${describeLLMErrorBody(errText)}`);
   }
 
   const data = (await res.json()) as {
@@ -306,6 +332,105 @@ export interface TranslateBatchResult {
   summary_zh: string;
 }
 
+type TranslateResponseItem = { idx?: number; title_zh?: string; summary_zh?: string };
+
+class TranslationResponseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TranslationResponseError';
+  }
+}
+
+const TRANSLATION_SYSTEM_PROMPT = `你是一个专业的新闻翻译助手。将以下英文新闻标题和摘要翻译成中文。
+要求：
+- 翻译要准确、流畅、符合中文新闻风格
+- 专业术语和人名保留英文或使用通用译名
+- 只返回 JSON 数组，不要添加其他文字
+返回格式: [{"idx": 0, "title_zh": "中文标题", "summary_zh": "中文摘要"}, ...]`;
+
+function isTranslationIsolationError(error: unknown): boolean {
+  if (error instanceof TranslationResponseError) return true;
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /LLM API error 422[\s\S]*new_sensitive/i.test(message);
+}
+
+function parseTranslationResponse(
+  batch: TranslateBatchItem[],
+  text: string
+): TranslateBatchResult[] {
+  const parsed = extractJsonArray(text) as TranslateResponseItem[];
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new TranslationResponseError('Translation response did not contain a valid JSON array');
+  }
+
+  const translated = new Map<number, TranslateBatchResult>();
+  for (let position = 0; position < parsed.length; position++) {
+    const item = parsed[position] || {};
+    const idx = typeof item.idx === 'number' ? item.idx : position;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length || translated.has(idx)) {
+      continue;
+    }
+    const original = batch[idx];
+    translated.set(idx, {
+      id: original.id,
+      title_zh: (item.title_zh || '').trim() || original.title,
+      summary_zh: (item.summary_zh || '').trim() || original.summary,
+    });
+  }
+
+  if (translated.size !== batch.length) {
+    throw new TranslationResponseError(
+      `Translation response was incomplete (${translated.size}/${batch.length})`
+    );
+  }
+
+  return [...translated.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, result]) => result);
+}
+
+async function translateBatchOnce(batch: TranslateBatchItem[]): Promise<TranslateBatchResult[]> {
+  const entries = batch.map((item, idx) =>
+    `[${idx}] Title: ${item.title}\nSummary: ${(item.summary || '').slice(0, 300)}`
+  ).join('\n\n');
+  const prompt = `请翻译以下 ${batch.length} 条新闻：\n\n${entries}`;
+  const text = await callLLM(prompt, TRANSLATION_SYSTEM_PROMPT);
+  return parseTranslationResponse(batch, text);
+}
+
+async function translateBatchWithIsolation(
+  batch: TranslateBatchItem[],
+  depth = 0
+): Promise<TranslateBatchResult[]> {
+  try {
+    return await translateBatchOnce(batch);
+  } catch (error) {
+    if (!isTranslationIsolationError(error)) {
+      console.error('[Translate] Batch failed:', sanitizeLLMLogMessage(error));
+      throw error;
+    }
+
+    const reason = sanitizeLLMLogMessage(error);
+    if (batch.length === 1) {
+      console.warn('[Translate] Skipping isolated item', {
+        id: batch[0].id,
+        reason,
+      });
+      return [];
+    }
+
+    const midpoint = Math.ceil(batch.length / 2);
+    console.warn('[Translate] Isolating failed batch', {
+      batch_size: batch.length,
+      depth,
+      reason,
+    });
+    const left = await translateBatchWithIsolation(batch.slice(0, midpoint), depth + 1);
+    const right = await translateBatchWithIsolation(batch.slice(midpoint), depth + 1);
+    return [...left, ...right];
+  }
+}
+
 export async function translateArticleBatch(
   items: TranslateBatchItem[]
 ): Promise<TranslateBatchResult[]> {
@@ -322,51 +447,7 @@ export async function translateArticleBatch(
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const batch = items.slice(i, i + BATCH_SIZE);
-    const entries = batch.map((item, idx) =>
-      `[${idx}] Title: ${item.title}\nSummary: ${(item.summary || '').slice(0, 300)}`
-    ).join('\n\n');
-
-    const systemPrompt = `你是一个专业的新闻翻译助手。将以下英文新闻标题和摘要翻译成中文。
-要求：
-- 翻译要准确、流畅、符合中文新闻风格
-- 专业术语和人名保留英文或使用通用译名
-- 只返回 JSON 数组，不要添加其他文字
-返回格式: [{"idx": 0, "title_zh": "中文标题", "summary_zh": "中文摘要"}, ...]`;
-
-    const prompt = `请翻译以下 ${batch.length} 条新闻：\n\n${entries}`;
-
-    try {
-      const text = await callLLM(prompt, systemPrompt);
-      const parsed = extractJsonArray(text) as Array<{ idx?: number; title_zh?: string; summary_zh?: string }>;
-      if (parsed && Array.isArray(parsed)) {
-        for (let k = 0; k < parsed.length; k++) {
-          const item = parsed[k] || {};
-          const idx = typeof item.idx === 'number' ? item.idx : k;
-          const original = batch[idx];
-          if (original) {
-            results.push({
-              id: original.id,
-              title_zh: (item.title_zh || '').trim() || original.title,
-              summary_zh: (item.summary_zh || '').trim() || original.summary,
-            });
-          }
-        }
-      }
-      const translatedIds = new Set(results.map(r => r.id));
-      for (const b of batch) {
-        if (!translatedIds.has(b.id)) {
-          results.push({ id: b.id, title_zh: b.title, summary_zh: b.summary });
-        }
-      }
-    } catch (e) {
-      console.error('Batch translate error:', e);
-      if (isLLMProviderError(e)) {
-        throw e;
-      }
-      for (const b of batch) {
-        results.push({ id: b.id, title_zh: b.title, summary_zh: b.summary });
-      }
-    }
+    results.push(...await translateBatchWithIsolation(batch));
   }
 
   return results;

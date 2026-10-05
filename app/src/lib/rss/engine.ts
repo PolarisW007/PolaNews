@@ -1,10 +1,11 @@
 import Parser from 'rss-parser';
 import { v4 as uuid } from 'uuid';
 import dns from 'node:dns';
-import { query, queryOne, execute, withTransaction } from '../db/schema';
+import { query, execute, withTransaction } from '../db/schema';
 import { translateArticleBatch, classifyArticle, summarizeArticle } from '../ai/llm';
 import { synthesizePendingAudio } from '../services/tts';
 import { cleanDigestText } from '../digest-clean';
+import { buildFeedSelectionClause, calculateNextFeedRetryAt } from './feed-retry';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -138,7 +139,6 @@ export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedRe
 }
 
 const CONCURRENCY_LIMIT = 15;
-const ERROR_THRESHOLD = 5;
 
 export interface FetchAllFeedsOptions {
   includeErrored?: boolean;
@@ -154,11 +154,29 @@ export interface FetchAllFeedsSummary {
   errors: { feed_id: string; title: string; error: string }[];
 }
 
+async function markFeedFailure(feedId: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const current = await client.query<{ error_count: number; status: string }>(
+      'SELECT error_count, status FROM feeds WHERE id = $1 FOR UPDATE',
+      [feedId]
+    );
+    const feed = current.rows[0];
+    if (!feed || feed.status === 'paused') return;
+
+    const errorCount = Number(feed.error_count || 0) + 1;
+    const nextRetryAt = calculateNextFeedRetryAt(errorCount);
+    await client.query(
+      `UPDATE feeds
+       SET error_count = $1, status = 'error', last_attempted_at = NOW(), next_retry_at = $2
+       WHERE id = $3 AND status != 'paused'`,
+      [errorCount, nextRetryAt, feedId]
+    );
+  });
+}
+
 export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise<FetchAllFeedsSummary> {
   const params: unknown[] = [];
-  const statusClause = options.includeErrored
-    ? "status IN ('active', 'error')"
-    : "status = 'active'";
+  const statusClause = buildFeedSelectionClause(Boolean(options.includeErrored));
   let idClause = '';
   if (options.feedIds?.length) {
     params.push(options.feedIds);
@@ -168,7 +186,10 @@ export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise
   const feeds = await query<{ id: string; title: string; url: string; status: string }>(
     `SELECT id, title, url, status FROM feeds
      WHERE ${statusClause} ${idClause}
-     ORDER BY last_fetched_at IS NULL DESC, last_fetched_at ASC`,
+     ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+       next_retry_at ASC NULLS FIRST,
+       last_attempted_at ASC NULLS FIRST,
+       last_fetched_at ASC NULLS FIRST`,
     params
   );
 
@@ -188,14 +209,29 @@ export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise
   }
 
   for (const chunk of chunks) {
+    await execute(
+      `UPDATE feeds SET last_attempted_at = NOW()
+       WHERE id = ANY($1::uuid[]) AND status != 'paused'`,
+      [chunk.map((feed) => feed.id)]
+    );
     const results = await Promise.allSettled(
       chunk.map((f) => fetchFeed(f.id, f.url))
     );
 
-    for (const settled of results) {
-      if (settled.status === 'rejected') continue;
+    for (let resultIndex = 0; resultIndex < results.length; resultIndex++) {
+      const settled = results[resultIndex];
+      const feed = chunk[resultIndex];
+      if (settled.status === 'rejected') {
+        await markFeedFailure(feed.id);
+        summary.failed++;
+        summary.errors.push({
+          feed_id: feed.id,
+          title: feed.title,
+          error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason),
+        });
+        continue;
+      }
       const result = settled.value;
-      const feed = chunk.find((f) => f.id === result.feedId);
 
       if (result.success) {
         try {
@@ -226,7 +262,10 @@ export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise
               inserted++;
             }
             await client.query(
-              `UPDATE feeds SET last_fetched_at = NOW(), error_count = 0, status = 'active' WHERE id = $1`,
+              `UPDATE feeds
+               SET last_fetched_at = NOW(), last_attempted_at = NOW(), next_retry_at = NULL,
+                 error_count = 0, status = 'active'
+               WHERE id = $1 AND status != 'paused'`,
               [result.feedId]
             );
           });
@@ -235,7 +274,7 @@ export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise
           if (feed?.status === 'error') summary.recovered++;
         } catch (e) {
           console.error(`Error saving articles for feed ${result.feedId}:`, e);
-          await execute('UPDATE feeds SET error_count = error_count + 1 WHERE id = $1', [result.feedId]);
+          await markFeedFailure(result.feedId);
           summary.failed++;
           summary.errors.push({
             feed_id: result.feedId,
@@ -244,12 +283,7 @@ export async function fetchAllFeeds(options: FetchAllFeedsOptions = {}): Promise
           });
         }
       } else {
-        const row = await queryOne<{ error_count: number }>('SELECT error_count FROM feeds WHERE id = $1', [result.feedId]);
-        const newCount = (row?.error_count ?? 0) + 1;
-        await execute('UPDATE feeds SET error_count = error_count + 1 WHERE id = $1', [result.feedId]);
-        if (newCount >= ERROR_THRESHOLD) {
-          await execute(`UPDATE feeds SET status = 'error' WHERE id = $1`, [result.feedId]);
-        }
+        await markFeedFailure(result.feedId);
         summary.failed++;
         summary.errors.push({
           feed_id: result.feedId,

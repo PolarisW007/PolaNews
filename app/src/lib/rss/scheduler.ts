@@ -3,12 +3,15 @@ import { runFullIngest } from './engine';
 import { generateDailyDigest } from '../services/digest';
 import { invalidateDigestCache } from '../services/digest-cache';
 import { initializeDatabase } from '../db/schema';
+import { runConfiguredAudioRetention } from '../services/tts';
 
 let feedTask: ScheduledTask | null = null;
 let digestTask: ScheduledTask | null = null;
+let audioRetentionTask: ScheduledTask | null = null;
 let bootstrapRan = false;
 let feedRunInProgress = false;
 let digestRunInProgress = false;
+let audioRetentionRunInProgress = false;
 
 const FEED_PIPELINE_TIMEOUT_MS = Number(process.env.POLANEWS_FEED_PIPELINE_TIMEOUT_MS ?? 25 * 60 * 1000);
 const DIGEST_TIMEOUT_MS = Number(process.env.POLANEWS_DIGEST_TIMEOUT_MS ?? 10 * 60 * 1000);
@@ -33,11 +36,12 @@ async function runLockedFeedPipeline(source: string): Promise<void> {
     return;
   }
   feedRunInProgress = true;
-  try {
-    await withTimeout(`runFullIngest:${source}`, runFullIngest(), FEED_PIPELINE_TIMEOUT_MS);
-  } finally {
-    feedRunInProgress = false;
-  }
+  const operation = runFullIngest();
+  void operation.then(
+    () => { feedRunInProgress = false; },
+    () => { feedRunInProgress = false; },
+  );
+  await withTimeout(`runFullIngest:${source}`, operation, FEED_PIPELINE_TIMEOUT_MS);
 }
 
 async function runLockedDigest(): Promise<void> {
@@ -46,11 +50,51 @@ async function runLockedDigest(): Promise<void> {
     return;
   }
   digestRunInProgress = true;
+  const operation = generateDailyDigest('zh');
+  void operation.then(
+    () => { digestRunInProgress = false; },
+    () => { digestRunInProgress = false; },
+  );
+  await withTimeout('generateDailyDigest', operation, DIGEST_TIMEOUT_MS);
+  invalidateDigestCache();
+}
+
+async function runLockedAudioRetention(): Promise<void> {
+  if (audioRetentionRunInProgress) {
+    console.warn('[RSS Scheduler] Previous audio retention run still active, skip this tick');
+    return;
+  }
+  audioRetentionRunInProgress = true;
   try {
-    await withTimeout('generateDailyDigest', generateDailyDigest('zh'), DIGEST_TIMEOUT_MS);
-    invalidateDigestCache();
+    const now = new Date();
+    const options = {
+      retentionDays: Number(process.env.POLANEWS_AUDIO_RETENTION_DAYS || 30),
+      maxDeletes: Number(process.env.POLANEWS_AUDIO_RETENTION_BATCH_SIZE || 1_000),
+      now,
+    };
+    const preview = await runConfiguredAudioRetention({
+      ...options,
+      mode: 'dry-run',
+    });
+    if (preview.skipped) {
+      console.warn('[RSS Scheduler] Audio retention preview skipped', { reason: preview.reason });
+      return;
+    }
+    const result = await runConfiguredAudioRetention({
+      ...options,
+      mode: 'apply',
+      expectedSelectionFingerprint: preview.selectionFingerprint,
+    });
+    console.log('[RSS Scheduler] Audio retention completed', {
+      skipped: result.skipped,
+      managed: result.managedFileCount,
+      eligible: result.eligibleFileCount,
+      deleted: result.deletedFileCount,
+      clearedReferences: result.clearedArticleReferenceCount,
+      failures: result.deleteFailureCount,
+    });
   } finally {
-    digestRunInProgress = false;
+    audioRetentionRunInProgress = false;
   }
 }
 
@@ -89,10 +133,24 @@ export function startDigestScheduler(): void {
   });
 }
 
+export function startAudioRetentionScheduler(): void {
+  if (process.env.POLANEWS_SCHEDULER_DISABLED === '1') return;
+  if (audioRetentionTask) return;
+  console.log('[RSS Scheduler] Audio retention scheduler started (daily 03:30 Asia/Shanghai)');
+  audioRetentionTask = cron.schedule('30 3 * * *', async () => {
+    try {
+      await runLockedAudioRetention();
+    } catch (err) {
+      console.error('[RSS Scheduler] audio retention failed:', err instanceof Error ? err.name : 'unknown');
+    }
+  }, { timezone: 'Asia/Shanghai' });
+}
+
 export async function startAllSchedulers(): Promise<void> {
   await initializeDatabase();
   startFeedScheduler();
   startDigestScheduler();
+  startAudioRetentionScheduler();
 
   // 启动时异步触发一次管道，追平服务重启间的空窗期；失败不影响主线程。
   if (!bootstrapRan) {

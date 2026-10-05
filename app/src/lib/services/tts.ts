@@ -1,18 +1,27 @@
 import { existsSync, mkdirSync } from 'fs';
-import { readFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { readFile, unlink } from 'fs/promises';
+import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { execute, query, queryOne } from '../db/schema';
+import { execute, query, queryOne, withTransaction } from '../db/schema';
 import { buildArticleSpeechText } from '../article-speech';
 import { createHash } from 'crypto';
+import type {
+  AudioRetentionOptions,
+  AudioRetentionResult,
+  AudioRetentionStore,
+  StaleArticleAudioReference,
+} from './audio-retention';
+import {
+  getAudioRetentionCutoff,
+  resolveAudioDirectory,
+  runAudioRetention,
+} from './audio-retention';
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.COSYVOICE_API_KEY || '';
 const PREFER_EDGE_TTS = process.env.TTS_PROVIDER === 'edge' || process.env.EDGE_TTS_ENABLED === 'true';
 let cosyVoiceUnavailable = false;
 
-const AUDIO_DIR = process.env.POLANEWS_AUDIO_DIR
-  ? resolve(process.env.POLANEWS_AUDIO_DIR)
-  : resolve(process.cwd(), '..', '.polanews-runtime', 'audio');
+const AUDIO_DIR = resolveAudioDirectory();
 const AUDIO_FILENAME_RE = /^[\w-]+\.mp3$/;
 
 export function hashSpeechText(text: string): string {
@@ -87,9 +96,9 @@ async function synthesizeCosyVoice(
   const filepath = join(AUDIO_DIR, filename);
 
   try {
-    const { exec } = await import('child_process');
+    const { execFile } = await import('child_process');
     const { promisify } = await import('util');
-    const execAsync = promisify(exec);
+    const execFileAsync = promisify(execFile);
 
     const scriptPath = join(process.cwd(), 'scripts', 'tts_cosyvoice.py');
     if (!existsSync(scriptPath)) {
@@ -97,9 +106,15 @@ async function synthesizeCosyVoice(
       return null;
     }
 
-    const safeText = text.slice(0, 1600).replace(/'/g, "'\\''");
-    const { stdout, stderr } = await execAsync(
-      `python3 "${scriptPath}" --text '${safeText}' --voice "${voice}" --output "${filepath}" --model cosyvoice-v3-flash`,
+    const { stdout, stderr } = await execFileAsync(
+      'python3',
+      [
+        scriptPath,
+        '--text', text.slice(0, 1600),
+        '--voice', voice,
+        '--output', filepath,
+        '--model', 'cosyvoice-v3-flash',
+      ],
       {
         timeout: 60000,
         env: { ...process.env, DASHSCOPE_API_KEY },
@@ -117,7 +132,9 @@ async function synthesizeCosyVoice(
       return null;
     }
 
-    console.error(`[TTS] CosyVoice Python 脚本错误: ${stderr}`);
+    console.error('[TTS] CosyVoice Python script failed', {
+      error: stderr ? 'provider_error' : 'empty_response',
+    });
     return null;
   } catch (e) {
     const message = e instanceof Error ? `${e.message}\n${'stdout' in e ? String((e as { stdout?: unknown }).stdout || '') : ''}` : String(e);
@@ -126,7 +143,9 @@ async function synthesizeCosyVoice(
       console.error('[TTS] CosyVoice 账号不可用，已切换到 edge-tts 降级合成');
       return null;
     }
-    console.error('[TTS] CosyVoice 合成失败:', e);
+    console.error('[TTS] CosyVoice synthesis failed', {
+      error: e instanceof Error ? e.name : 'unknown',
+    });
     return null;
   }
 }
@@ -139,19 +158,25 @@ async function synthesizeEdgeTTS(
   const edgeVoice = 'zh-CN-YunjianNeural';
 
   try {
-    const { exec } = await import('child_process');
+    const { execFile } = await import('child_process');
     const { promisify } = await import('util');
-    const execAsync = promisify(exec);
+    const execFileAsync = promisify(execFile);
 
     const filename = `${uuidv4()}.mp3`;
     const filepath = join(AUDIO_DIR, filename);
-    const safeText = text.replace(/"/g, '\\"').replace(/\n/g, ' ').slice(0, 5000);
-    await execAsync(`edge-tts --voice "${edgeVoice}" --text "${safeText}" --write-media "${filepath}"`, {
+    const safeText = text.replace(/\n/g, ' ').slice(0, 5000);
+    await execFileAsync('edge-tts', [
+      '--voice', edgeVoice,
+      '--text', safeText,
+      '--write-media', filepath,
+    ], {
       timeout: 60000,
     });
     return { filename, filepath };
   } catch (e) {
-    console.error('[TTS] Edge TTS 降级也失败:', e);
+    console.error('[TTS] Edge TTS fallback failed', {
+      error: e instanceof Error ? e.name : 'unknown',
+    });
     return null;
   }
 }
@@ -220,6 +245,46 @@ export async function generateBroadcastAudio(broadcastId: string): Promise<boole
   return true;
 }
 
+export interface ArticleAudioSourceRow {
+  id: string;
+  title: string;
+  title_zh: string;
+  summary: string;
+  summary_zh: string;
+  ai_summary: string;
+  ai_key_points: unknown;
+}
+
+export async function synthesizeAndPersistArticleAudio(
+  row: ArticleAudioSourceRow,
+  voice = 'longshu_v3',
+): Promise<boolean> {
+  const text = buildArticleSpeechText(row, 'zh', 1600);
+  if (!text) return false;
+
+  const result = await synthesizeAudio(text, voice);
+  if (!result) return false;
+
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const url = `${basePath}/api/tts/audio/${result.filename}`;
+  try {
+    const updated = await execute(
+      `UPDATE articles
+       SET audio_url = $1, audio_voice = $2, audio_text_hash = $3
+       WHERE id = $4
+         AND ((audio_url IS NULL OR audio_url = '') OR (audio_text_hash IS NULL OR audio_text_hash = ''))`,
+      [url, voice, hashSpeechText(text), row.id],
+    );
+    if (updated > 0) return true;
+  } catch (error) {
+    await unlink(result.filepath).catch(() => undefined);
+    throw error;
+  }
+
+  await unlink(result.filepath).catch(() => undefined);
+  return false;
+}
+
 /**
  * 为已翻译但没有语音的最新文章预合成中文语音并持久化 audio_url。
  * 优先使用 title_zh + ai_summary / summary_zh，回退到原文标题+摘要。
@@ -229,45 +294,93 @@ export async function synthesizePendingAudio(
   limit = 20,
   voice = 'longshu_v3'
 ): Promise<number> {
-  const rows = await query<{
-    id: string;
-    title: string;
-    title_zh: string;
-    summary: string;
-    summary_zh: string;
-    ai_summary: string;
-    ai_key_points: unknown;
-  }>(
+  const retentionCutoff = getAudioRetentionCutoff();
+  const rows = await query<ArticleAudioSourceRow>(
     `SELECT id, title, title_zh, summary, summary_zh, ai_summary, ai_key_points
      FROM articles
      WHERE ((audio_url IS NULL OR audio_url = '') OR (audio_text_hash IS NULL OR audio_text_hash = ''))
-       AND (title_zh IS NOT NULL AND title_zh <> '')
+       AND COALESCE(published_at, created_at) >= $2
      ORDER BY published_at DESC NULLS LAST, created_at DESC
      LIMIT $1`,
-    [limit]
+    [limit, retentionCutoff]
   );
 
   if (rows.length === 0) return 0;
 
   let synthesized = 0;
   for (const row of rows) {
-    const text = buildArticleSpeechText(row, 'zh', 1600);
-    if (!text) continue;
-
     try {
-      const result = await synthesizeAudio(text, voice);
-      if (!result) continue;
-      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-      const url = `${basePath}/api/tts/audio/${result.filename}`;
-      await execute(
-        'UPDATE articles SET audio_url = $1, audio_voice = $2, audio_text_hash = $3 WHERE id = $4',
-        [url, voice, hashSpeechText(text), row.id]
-      );
-      synthesized++;
+      if (await synthesizeAndPersistArticleAudio(row, voice)) synthesized++;
     } catch (e) {
-      console.error('[TTS] synthesizePendingAudio failed for', row.id, e);
+      console.error('[TTS] synthesizePendingAudio failed', {
+        articleId: row.id,
+        error: e instanceof Error ? e.name : 'unknown',
+      });
     }
   }
 
   return synthesized;
+}
+
+function createAudioRetentionStore(): AudioRetentionStore {
+  return {
+    async listBroadcastSegments() {
+      const rows = await query<{ segments: unknown }>(
+        `SELECT segments
+         FROM broadcasts
+         WHERE segments IS NOT NULL AND segments <> '[]'::jsonb`,
+      );
+      return rows.map((row) => row.segments);
+    },
+
+    async listArticleAudioReferences() {
+      return query<{
+        id: string;
+        audio_url: string | null;
+        audio_url_en: string | null;
+        audio_url_ja: string | null;
+      }>(
+        `SELECT id, audio_url, audio_url_en, audio_url_ja
+         FROM articles
+         WHERE COALESCE(audio_url, '') <> ''
+            OR COALESCE(audio_url_en, '') <> ''
+            OR COALESCE(audio_url_ja, '') <> ''`,
+      );
+    },
+
+    async clearArticleAudioReferences(references: StaleArticleAudioReference[]) {
+      if (references.length === 0) return 0;
+      return withTransaction(async (client) => {
+        const columns = {
+          zh: ['audio_url', 'audio_text_hash'],
+          en: ['audio_url_en', 'audio_text_hash_en'],
+          ja: ['audio_url_ja', 'audio_text_hash_ja'],
+        } as const;
+        let cleared = 0;
+        for (const language of ['zh', 'en', 'ja'] as const) {
+          const matches = references.filter((reference) => reference.language === language);
+          if (matches.length === 0) continue;
+          const [urlColumn, hashColumn] = columns[language];
+          const result = await client.query(
+            `UPDATE articles AS article
+             SET ${urlColumn} = '', ${hashColumn} = ''
+             FROM unnest($1::uuid[], $2::text[]) AS stale(id, url)
+             WHERE article.id = stale.id AND article.${urlColumn} = stale.url`,
+            [matches.map((reference) => reference.id), matches.map((reference) => reference.url)],
+          );
+          cleared += result.rowCount ?? 0;
+        }
+        return cleared;
+      });
+    },
+  };
+}
+
+export async function runConfiguredAudioRetention(
+  options: AudioRetentionOptions = {},
+): Promise<AudioRetentionResult> {
+  return runAudioRetention(
+    { ...options, audioDir: AUDIO_DIR },
+    createAudioRetentionStore(),
+  );
 }
