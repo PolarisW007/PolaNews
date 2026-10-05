@@ -1,28 +1,127 @@
 {
   "slug": "2026-10-06-production-stability-weekly-regeneration",
-  "status": "implementation_in_progress",
+  "status": "complete",
   "risk": "P1",
   "production_base": "6a92017b5f726159061a6d63724710fd47bacb2a",
   "owners": {"requester": "user", "dri": "熾駒"},
-  "window": {"since": "2026-09-29T00:00:00+08:00", "until": "runtime"},
+  "window": {
+    "since": "2026-09-29T00:00:00+08:00",
+    "until": "2026-10-06T02:40:09+08:00",
+    "initial_reset_articles": 393,
+    "scheduler_added_articles_in_window": 2,
+    "target_articles": 395
+  },
   "artifacts": {
     "requirement": "docs/pola/project-knowledge/requirements/2026-10-06-production-stability-weekly-regeneration.md",
     "prd": "docs/pola/project-knowledge/specs/2026-10-06-production-stability-weekly-regeneration-prd.md",
     "sdd": "docs/pola/project-knowledge/architecture/2026-10-06-production-stability-weekly-regeneration-sdd.md",
     "tests": "docs/pola/project-knowledge/delivery/2026-10-06-production-stability-weekly-regeneration/function_test_cases.json",
+    "test_report": "docs/pola/project-knowledge/test-reports/2026-10-06-production-stability-weekly-regeneration-test.md",
     "devlog": "docs/pola/project-knowledge/devlogs/2026-10-06-production-stability-weekly-regeneration.md",
     "release": "docs/pola/project-knowledge/release/2026-10-06-production-stability-weekly-regeneration-release.md"
   },
   "stages": {
     "requirement": "complete",
     "architecture": "complete",
-    "implementation": "in_progress",
-    "review": "pending",
-    "test": "pending",
-    "regression": "pending",
-    "release": "pending",
-    "finalization": "pending"
+    "implementation": "complete",
+    "review": "complete",
+    "test": "complete",
+    "regression": "complete",
+    "release": "complete",
+    "finalization": "complete"
+  },
+  "deployed_commits": [
+    "78bbd45b512a3319abec4ec68a7ebd349c073444",
+    "efc434e06b7e50025251b4d0a12d3daa4f50dc82"
+  ],
+  "production": {
+    "model": "MiniMax-M3",
+    "minimax_base_url": "https://api.minimaxi.com/v1",
+    "alternate_region_probe": "https://api.minimax.io/v1 returned invalid api key",
+    "scheduler_disabled_gate": "verified in production for bootstrap and cron",
+    "scheduler_disabled": "0",
+    "registered_cron_jobs": 3,
+    "bootstrap": {
+      "feed_attempted": 6,
+      "feed_succeeded": 2,
+      "feed_failed": 4,
+      "feed_recovered": 0,
+      "new_articles": 7,
+      "translated": 77,
+      "summarized": 14,
+      "classified": 42,
+      "audio_synthesized": 16,
+      "status": "complete"
+    },
+    "minimax_sensitive_isolation": "production 422 new_sensitive isolated 10->5->2->1; only matching single-article leaf items were skipped (possibly multiple), while all others continued",
+    "feed_status_after_observation": {"active": 2, "error": 55},
+    "error_retry_state": {"future_next_retry": 54, "due": 1, "assessment": "normal time progression"},
+    "feed_canary": {
+      "status": "passed_and_cleaned",
+      "failure_evidence": "error|3|3600|t|f",
+      "recovery_evidence": "active|0|next_retry_null=true|last_fetched=true|articles=0",
+      "residual_rows": 0
+    },
+    "runtime": {
+      "pid": 667658,
+      "supervisor_status": "RUNNING",
+      "git_head": "efc434e06b7e50025251b4d0a12d3daa4f50dc82",
+      "audio_dir": "verified",
+      "postgres": "accepting connections"
+    },
+    "scheduler_observation": "complete; A12 passed"
+  },
+  "verification": {
+    "stability_tests": "17/17 passed",
+    "typescript": "passed",
+    "eslint": "passed with 0 errors and 0 warnings",
+    "production_build": "passed"
+  },
+  "regeneration": {
+    "phase_evidence": "393 existing articles reset and regenerated; 2 newly fetched articles with published_at in the same window were automatically processed",
+    "summaries": {"completed": 395, "target": 395, "status": "complete"},
+    "audio": {"completed": 395, "target": 395, "pending": 0, "failed": 0, "status": "complete"},
+    "database_counts": {
+      "total": 395,
+      "summary": 395,
+      "keypoints": 395,
+      "audio_url": 395,
+      "audio_text_hash": 395,
+      "unique_audio_url": 395
+    },
+    "audio_files": {
+      "count": 395,
+      "missing": 0,
+      "zero_bytes": 0,
+      "invalid_filename": 0,
+      "total_bytes": 140262480,
+      "min_bytes": 187776,
+      "max_bytes": 722592
+    },
+    "audio_http_samples": [
+      {"position": "first", "status": 200, "content_type": "audio/mpeg", "bytes": 209808},
+      {"position": "middle", "status": 200, "content_type": "audio/mpeg", "bytes": 330480},
+      {"position": "last", "status": 200, "content_type": "audio/mpeg", "bytes": 346896}
+    ]
+  },
+  "smoke": {
+    "localhost_core_routes": 200,
+    "anonymous_history": 401,
+    "public_polanews": 200
+  },
+  "disk": {"available": "7.5G", "used_percent": 85, "audio_dir_size": "3.5G"},
+  "backups": {
+    "weekly_article_ai_fields": "/private/tmp/polanews-prod-backup-20261006T0200/week-article-ai-fields-exact.csv.gz",
+    "weekly_article_ai_fields_sha256": "93613e713824b2f0a0271100235e287b5cf18524a37e833a83508dab2eaa5b54",
+    "weekly_article_ai_fields_final": "/private/tmp/polanews-prod-backup-20261006T0200/week-article-ai-fields-final.csv.gz",
+    "weekly_article_ai_fields_final_rows_including_header": 396,
+    "weekly_article_ai_fields_final_gzip": "ok",
+    "weekly_article_ai_fields_final_sha256": "b0e479a1b00d4972e55e190ec8dc5e8bd27ca581247df8e36caecc85470d6b7a",
+    "feeds_before_scheduler_restore": "/private/tmp/polanews-prod-backup-20261006T0200/feeds-before-scheduler-restore.csv.gz",
+    "feeds_before_scheduler_restore_sha256": "4cedad56c159ce0183c7941d5b21753dfd352feca8bcf172f655ef7899d5962b"
   },
   "dirty_worktree": "isolated managed worktree created from exact production commit; original main dirty state untouched",
-  "blockers": []
+  "blockers": [],
+  "acceptance": {"A1-A12": "passed"},
+  "open_items": []
 }

@@ -61,6 +61,8 @@ flowchart TD
 - 维护 API：`POST /api/ops/maintenance`，Header `X-PolaNews-Ops-Token`，action 为 `status` / `summaries` / `audio`，每批有硬上限；不返回 secret。
 - 再生成 checkpoint：先备份和重置近一周目标字段；后续只处理缺失字段。连续无进展停止，重复调用幂等。
 - Digest 日期：对 PostgreSQL `DATE` 使用本地年月日字段，ISO 字符串只截取原始日期部分，禁止把 date-only 值转 UTC。
+- Scheduler 总闸门：`POLANEWS_SCHEDULER_DISABLED=1` 必须同时阻止 instrumentation bootstrap 和 cron 注册；维护期不得先启动一次 bootstrap 再跳过后续 cron。
+- MiniMax 区域：生产 Key 经脱敏探针确认属于 `api.minimaxi.com/v1`；相同 Key 请求 `api.minimax.io/v1` 返回 `invalid api key`，因此 `MiniMax-M3` 的生产 base URL 固定为中国区 endpoint。
 
 ## 7. 并发、超时、日志和成本护栏
 
@@ -102,3 +104,13 @@ flowchart TD
 ## 11. 验收映射
 
 需求 A1-A12 全部映射到 `docs/pola/project-knowledge/delivery/2026-10-06-production-stability-weekly-regeneration/function_test_cases.json`。
+
+## 12. 实际部署增量
+
+- `78bbd45`：首个生产稳定性热修，包含 RSS 退避、MiniMax 批次隔离、Digest 日期、音频 retention 与维护入口。
+- `efc434e`：修复维护期设置 `POLANEWS_SCHEDULER_DISABLED=1` 后 instrumentation 仍触发 bootstrap 的缺口，并新增对应回归测试。
+- 最终代码门禁：稳定性测试 17/17、TypeScript、目标 ESLint 与生产 build 均通过。
+- 再生成固定窗口：`2026-09-29T00:00:00+08:00` 至 `2026-10-06T02:40:09+08:00`。原有 393 篇完成重置和再生成；bootstrap 新增文章中另有 2 篇按 `published_at` 归入该窗口并自动处理。最终摘要与音频覆盖均为 395/395，pending=0、失败=0；395 个文件全部存在且非零，文件名全部合法。
+- Scheduler 已恢复为 `POLANEWS_SCHEDULER_DISABLED=0`，3 个 cron 已注册。Bootstrap 完整结果：feeds attempted=6、succeeded=2、failed=4、recovered=0、new articles=7、translated=77、summarized=14、classified=42、audio synthesized=16。
+- 真实 MiniMax `422 new_sensitive` 在生产按 10→5→2→1 隔离；仅跳过命中的单篇叶子项（可能多条），其余文章继续处理。受控 feed canary 验证失败态 `error|3|3600|t|f` 与恢复态 `active|0|next_retry_null=true|last_fetched=true|articles=0`，清理后残留 0。
+- 最终 feed 快照 active=2、error=55、due=1、future=54；相较先前 due=0 的变化来自正常时间推进。服务 PID 667658 为 RUNNING，Git HEAD `efc434e`，A12 通过。

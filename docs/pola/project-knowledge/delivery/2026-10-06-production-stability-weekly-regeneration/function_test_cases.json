@@ -4,6 +4,29 @@
     "docs/pola/project-knowledge/specs/2026-10-06-production-stability-weekly-regeneration-prd.md",
     "docs/pola/project-knowledge/architecture/2026-10-06-production-stability-weekly-regeneration-sdd.md"
   ],
+  "execution_summary": {
+    "status": "complete",
+    "acceptance": "A1-A12 passed",
+    "stability_tests": "17/17 passed",
+    "weekly_regeneration": "393 existing articles reset and regenerated; 2 newly fetched in-window articles automatically processed; final 395/395 summaries and audio; 0 pending; 0 failed",
+    "scheduler_bootstrap": "complete",
+    "feed_canary": "passed and cleaned; residual rows 0",
+    "public_smoke": "https://aipd.me/polanews returned 200"
+  },
+  "acceptance_results": [
+    {"id": "A1", "status": "pass"},
+    {"id": "A2", "status": "pass"},
+    {"id": "A3", "status": "pass"},
+    {"id": "A4", "status": "pass"},
+    {"id": "A5", "status": "pass"},
+    {"id": "A6", "status": "pass"},
+    {"id": "A7", "status": "pass"},
+    {"id": "A8", "status": "pass"},
+    {"id": "A9", "status": "pass"},
+    {"id": "A10", "status": "pass"},
+    {"id": "A11", "status": "pass"},
+    {"id": "A12", "status": "pass"}
+  ],
   "features": [
     {
       "id": "F1",
