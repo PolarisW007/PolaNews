@@ -6,6 +6,7 @@ import { translateArticleBatch, classifyArticle, summarizeArticle } from '../ai/
 import { synthesizePendingAudio } from '../services/tts';
 import { cleanDigestText } from '../digest-clean';
 import { buildFeedSelectionClause, calculateNextFeedRetryAt } from './feed-retry';
+import { fetchFeedText } from './feed-transport';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -14,11 +15,7 @@ const RSS_HEADERS = {
   Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8',
 };
 
-const parser = new Parser({
-  headers: RSS_HEADERS,
-  requestOptions: { family: 4 },
-  timeout: 10_000,
-});
+const parser = new Parser();
 
 export interface ParsedArticle {
   title: string;
@@ -59,15 +56,9 @@ function cleanHtmlText(text: string): string {
 }
 
 async function fetchAnthropicNews(feedId: string): Promise<FeedResult> {
-  const res = await fetch('https://www.anthropic.com/news', {
+  const html = await fetchFeedText('https://www.anthropic.com/news', {
     headers: RSS_HEADERS,
-    redirect: 'follow',
   });
-  if (!res.ok) {
-    throw new Error(`Anthropic news fallback failed: HTTP ${res.status}`);
-  }
-
-  const html = await res.text();
   const seen = new Set<string>();
   const articles: ParsedArticle[] = [];
   const linkPattern = /href="(\/news\/[^"#?]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -109,7 +100,8 @@ async function fetchAnthropicNews(feedId: string): Promise<FeedResult> {
 
 export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedResult> {
   try {
-    const feed = await parser.parseURL(feedUrl);
+    const xml = await fetchFeedText(feedUrl, { headers: RSS_HEADERS });
+    const feed = await parser.parseString(xml);
     const articles: ParsedArticle[] = (feed.items ?? []).map((item) => {
       let coverImage = '';
       try { coverImage = item.enclosure?.url || ''; } catch { /* ignore */ }
@@ -138,7 +130,7 @@ export async function fetchFeed(feedId: string, feedUrl: string): Promise<FeedRe
   }
 }
 
-const CONCURRENCY_LIMIT = 15;
+const CONCURRENCY_LIMIT = 3;
 
 export interface FetchAllFeedsOptions {
   includeErrored?: boolean;

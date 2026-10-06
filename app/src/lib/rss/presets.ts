@@ -78,14 +78,14 @@ export const PRESET_FEEDS: PresetFeed[] = [
   // AI
   {
     title: 'OpenAI Blog',
-    url: 'https://openai.com/blog/rss.xml',
+    url: 'https://openai.com/news/rss.xml',
     site_url: 'https://openai.com/blog',
     language: 'en',
     category: 'ai',
   },
   {
     title: 'Google AI Blog',
-    url: 'https://blog.google/technology/ai/rss/',
+    url: 'https://blog.google/innovation-and-ai/technology/ai/rss/',
     site_url: 'https://blog.google/technology/ai',
     language: 'en',
     category: 'ai',
