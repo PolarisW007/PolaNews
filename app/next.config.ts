@@ -1,9 +1,14 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+const basePath = '/polanews';
+
 const nextConfig: NextConfig = {
   output: 'standalone',
-  basePath: '/polanews',
+  basePath,
+  env: {
+    NEXT_PUBLIC_BASE_PATH: basePath,
+  },
   serverExternalPackages: ['pg', 'sharp', 'jsdom', 'bullmq', 'ioredis', 'web-push', 'nodemailer'],
   outputFileTracingExcludes: {
     '/*': ['./data/audio/**/*'],
