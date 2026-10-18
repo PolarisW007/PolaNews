@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, useSyncExternalStore, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -28,7 +29,7 @@ function highlightText(text: string, keyword: string) {
   if (!keyword.trim() || !text) return text;
   const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
-  return parts.map((part, i) =>
+  return parts.map(part =>
     part.toLowerCase() === keyword.toLowerCase()
       ? `<mark style="background:rgba(0,255,157,0.25);color:var(--accent);border-radius:2px;padding:0 2px">${part}</mark>`
       : part
@@ -38,13 +39,32 @@ function highlightText(text: string, keyword: string) {
 type SearchMode = 'keyword' | 'semantic';
 
 const SEARCH_HISTORY_KEY = 'search_history';
+const SEARCH_HISTORY_EVENT = 'polanews-search-history-change';
 const MAX_HISTORY = 5;
+
+function subscribeSearchHistory(callback: () => void) {
+  window.addEventListener('storage', callback);
+  window.addEventListener(SEARCH_HISTORY_EVENT, callback);
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener(SEARCH_HISTORY_EVENT, callback);
+  };
+}
+
+function historySnapshot() {
+  return localStorage.getItem(SEARCH_HISTORY_KEY) || '[]';
+}
+
+function parseHistory(value: string): string[] {
+  try {
+    const data: unknown = JSON.parse(value);
+    return Array.isArray(data) ? data.filter((x): x is string => typeof x === 'string').slice(0, MAX_HISTORY) : [];
+  } catch { return []; }
+}
 
 function getSearchHistory(): string[] {
   if (typeof window === 'undefined') return [];
-  try {
-    return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
-  } catch { return []; }
+  return parseHistory(historySnapshot());
 }
 
 function addSearchHistory(q: string) {
@@ -52,25 +72,26 @@ function addSearchHistory(q: string) {
   const history = getSearchHistory().filter(h => h !== q);
   history.unshift(q);
   localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+  window.dispatchEvent(new Event(SEARCH_HISTORY_EVENT));
 }
 
-export default function SearchPage() {
+function SearchContent({ initialQuery }: { initialQuery: string }) {
   const { toast } = useToast();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [articles, setArticles] = useState<SearchArticle[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(Boolean(initialQuery));
+  const [searched, setSearched] = useState(Boolean(initialQuery));
   const [searchMode, setSearchMode] = useState<SearchMode>('keyword');
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const storedHistory = useSyncExternalStore(subscribeSearchHistory, historySnapshot, () => '[]');
+  const searchHistory = useMemo(() => parseHistory(storedHistory), [storedHistory]);
   const inputRef = useRef<HTMLInputElement>(null);
   const limit = 20;
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   useEffect(() => {
     inputRef.current?.focus();
-    setSearchHistory(getSearchHistory());
   }, []);
 
   const doKeywordSearch = useCallback(async (q: string, p: number) => {
@@ -101,10 +122,24 @@ export default function SearchPage() {
       else setArticles(prev => [...prev, ...(data.articles || [])]);
       setTotal(data.total || 0);
       addSearchHistory(q);
-      setSearchHistory(getSearchHistory());
     } catch (e) { toast(e instanceof Error ? e.message : '搜索失败，请重试', 'error'); }
     setLoading(false);
   }, [toast, searchMode, doKeywordSearch, doSemanticSearch]);
+
+  useEffect(() => {
+    if (!initialQuery) return;
+    let active = true;
+    api.articles.search({ q: initialQuery, page: 1, limit }).then(data => {
+      if (!active) return;
+      const result = data as SearchResult;
+      setArticles(result.articles || []);
+      setTotal(result.total || 0);
+      addSearchHistory(initialQuery);
+    }).catch(error => {
+      if (active) toast(error instanceof Error ? error.message : '搜索失败，请重试', 'error');
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [initialQuery, toast]);
 
   const handleSearch = () => {
     setPage(1);
@@ -125,12 +160,9 @@ export default function SearchPage() {
 
   const clearHistory = () => {
     if (typeof window !== 'undefined') localStorage.removeItem(SEARCH_HISTORY_KEY);
-    setSearchHistory([]);
+    window.dispatchEvent(new Event(SEARCH_HISTORY_EVENT));
   };
 
-  useEffect(() => {
-    if (page > 1) doSearch(query, page);
-  }, [page, doSearch, query]);
 
   const formatTime = (dateStr: string) => {
     try {
@@ -294,7 +326,7 @@ export default function SearchPage() {
             {!loading && articles.length < total && (
               <div className="flex justify-center py-6">
                 <button
-                  onClick={() => setPage(p => p + 1)}
+                  onClick={() => { const nextPage = page + 1; setPage(nextPage); void doSearch(query, nextPage); }}
                   className="rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 text-sm"
                   style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
                 >
@@ -317,4 +349,17 @@ export default function SearchPage() {
       </div>
     </MainLayout>
   );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<MainLayout><div role="status" className="p-6"><Loader2 className="animate-spin" aria-label="正在加载" /></div></MainLayout>}>
+      <SearchFromUrl />
+    </Suspense>
+  );
+}
+
+function SearchFromUrl() {
+  const query = useSearchParams().get('q')?.trim() || '';
+  return <SearchContent key={query} initialQuery={query} />;
 }

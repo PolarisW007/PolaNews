@@ -34,16 +34,44 @@ export interface TrendingTopic {
   articles: Array<{ id: string; title: string; published_at: string }>;
 }
 
-export async function extractTrendingKeywords(hours = 24): Promise<TrendingKeyword[]> {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+type ArticleTitles = { title: string; title_zh: string; keywords: string[] };
+type KeywordCacheEntry = { data: TrendingKeyword[]; expiresAt: number; refreshing: boolean };
+const keywordCache = new Map<number, KeywordCacheEntry>();
+const initialLoads = new Map<number, Promise<TrendingKeyword[]>>();
+const KEYWORD_CACHE_TTL = 300_000;
+const MAX_KEYWORD_CACHES = 4;
 
-  const articles = await query<{ title: string; title_zh: string; keywords: string[] }>(
+async function readRecentTitles(hours: number): Promise<ArticleTitles[]> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  return query<ArticleTitles>(
     `SELECT title, title_zh, keywords FROM articles
      WHERE created_at >= $1
      ORDER BY created_at DESC LIMIT 200`, [since]
   );
 
-  if (articles.length === 0) return [];
+}
+
+function countKeywords(articles: ArticleTitles[]): TrendingKeyword[] {
+  const wordCount: Record<string, number> = {};
+  for (const a of articles) {
+    const words = (a.title_zh || a.title).split(/[\s,，.。!！?？;；:：、\-\(\)\[\]"'""'']+/).filter(w => w.length >= 2 && !STOP_WORDS.has(w.toLowerCase()));
+    for (const w of words) wordCount[w] = (wordCount[w] || 0) + 1;
+  }
+  return Object.entries(wordCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([keyword, count]) => ({ keyword, count, trend: 'stable' as const }));
+}
+
+async function refreshKeywords(hours: number, entry: KeywordCacheEntry, initial?: ArticleTitles[]) {
+  entry.refreshing = true;
+  entry.expiresAt = Date.now() + KEYWORD_CACHE_TTL;
+  try {
+    const articles = initial || await readRecentTitles(hours);
+    if (!articles.length) {
+      entry.data = [];
+      return;
+    }
 
   const titles = articles.map(a => a.title_zh || a.title).join('\n');
 
@@ -51,29 +79,46 @@ export async function extractTrendingKeywords(hours = 24): Promise<TrendingKeywo
 返回 JSON 数组，格式: [{"keyword": "关键词", "count": 出现次数估计, "trend": "up|down|stable"}]
 只返回 JSON，不要其他文字。`;
 
-  try {
     const result = await callLLM(titles.slice(0, 4000), systemPrompt);
     const match = result.match(/\[[\s\S]*\]/);
     if (match) {
-      const parsed = JSON.parse(match[0]) as TrendingKeyword[];
-      return parsed.filter(k => k.keyword.length >= 2 && !STOP_WORDS.has(k.keyword.toLowerCase()));
+      const parsed: unknown = JSON.parse(match[0]);
+      if (Array.isArray(parsed)) {
+        const keywords = parsed.filter((k): k is TrendingKeyword =>
+          k && typeof k.keyword === 'string' && k.keyword.length >= 2
+          && Number.isFinite(k.count) && ['up', 'down', 'stable'].includes(k.trend)
+          && !STOP_WORDS.has(k.keyword.toLowerCase()));
+        if (keywords.length) entry.data = keywords.slice(0, 15);
+      }
     }
   } catch (e) {
-    console.error('[Trending] Keyword extraction error:', e);
+    console.warn('[Trending] Keyword refresh failed', { error: e instanceof Error ? e.name : 'unknown' });
+  } finally {
+    entry.refreshing = false;
   }
+}
 
-  const wordCount: Record<string, number> = {};
-  for (const a of articles) {
-    const words = (a.title_zh || a.title).split(/[\s,，.。!！?？;；:：、\-\(\)\[\]"'""'']+/).filter(w => w.length >= 2 && !STOP_WORDS.has(w.toLowerCase()));
-    for (const w of words) {
-      wordCount[w] = (wordCount[w] || 0) + 1;
+export async function extractTrendingKeywords(hours = 24): Promise<TrendingKeyword[]> {
+  const cached = keywordCache.get(hours);
+  if (cached) {
+    if (cached.expiresAt <= Date.now() && !cached.refreshing) {
+      void refreshKeywords(hours, cached);
     }
+    return cached.data;
   }
-
-  return Object.entries(wordCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 15)
-    .map(([keyword, count]) => ({ keyword, count, trend: 'stable' as const }));
+  const loading = initialLoads.get(hours);
+  if (loading) return loading;
+  const task = readRecentTitles(hours).then(articles => {
+    const entry: KeywordCacheEntry = { data: countKeywords(articles), expiresAt: Date.now() + KEYWORD_CACHE_TTL, refreshing: false };
+    keywordCache.set(hours, entry);
+    if (keywordCache.size > MAX_KEYWORD_CACHES) {
+      keywordCache.delete(keywordCache.keys().next().value!);
+    }
+    void refreshKeywords(hours, entry, articles);
+    return entry.data;
+  }).finally(() => initialLoads.delete(hours));
+  initialLoads.set(hours, task);
+  return task;
 }
 
 export async function getTopicTimeline(topic: string, days = 7): Promise<Array<{ date: string; count: number }>> {
