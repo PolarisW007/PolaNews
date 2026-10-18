@@ -1,6 +1,6 @@
 # PolaNews 线上运行检查开发日志
 
-日期：2026-10-18。状态：进行中。
+日期：2026-10-18。状态：三项修复已发布；语音供应商阻塞未解决。
 
 独立工作树基于生产 HEAD 929b768，分支 codex/runtime-audit-20261018。主工作区用户已有改动保持不变。生产 feeds 路由、抓取鉴权及页面已有修复不覆盖，也不混入本次提交。
 
@@ -11,3 +11,7 @@
 新增真实浏览器发现：首页搜索跳转后搜索页未读 q，未显示结果；登录链接丢失 next。已针对 SearchContent 与 Header 补修复，重新隔离构建。首次构建因缺少 Supervisor 提供的音频目录变量而中止，在线产物未受影响；复用受保护的运行环境后构建成功。
 
 发布前验证：三文件 ESLint 通过；缓存 12 项断言通过；TypeScript 与 53 页生产构建通过；deploy doctor --release 通过；仅 loopback 的 canary 浏览器旅程 9/9 通过，包括搜索 20→40 条分页、真实详情 4583 字符、手机无溢出和登录 next。保留旧 .next 与三个源文件备份后定向切换，不在在线目录执行构建。发布详细记录在 PolaUUH/docs/pola/project-knowledge/release/2026-10-18-pola-runtime-audit.md。
+
+发布：9a1e29c 已推送 origin/codex/runtime-audit-20261018，并在生产 fast-forward；BUILD_ID O3O47r_L0KEqg9J56YnM5。仅重启 polanews，09:20:34 停止至 09:21:10 新进程启动，约 36 秒切换间隔。保留旧哈希静态资源与原构建/源文件备份。公网旅程 9/9，趋势首次约 0.40 秒，文章和资源正常；后续回查同 PID 继续运行，有多轮 ingest 完成。TTS 仍失败，未伪报完成。没有变更 Nginx、数据库或凭据。
+
+汇总日志按 PolaUUH 项目规则同步钉钉及开发日志 AI 表格；精确链接与回读状态见 PolaUUH 本次 delivery_state.json。该日志后续提交仅记录已发布结果，不另行更换运行构建。
