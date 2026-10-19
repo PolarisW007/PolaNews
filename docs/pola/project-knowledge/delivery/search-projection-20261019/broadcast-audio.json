@@ -1,0 +1,94 @@
+{
+  "checked_at": "2026-10-19T16:56:24.924919+00:00",
+  "broadcast_date": "2026-10-16T16:00:00.000Z",
+  "created_at": "2026-10-17T18:46:46.640Z",
+  "status": "ready",
+  "segments": [
+    {
+      "index": 1,
+      "path": "/polanews/api/tts/audio/35a15991-6807-4bc1-8bbb-a8653912398d.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 50112,
+      "seconds": 0.178925
+    },
+    {
+      "index": 2,
+      "path": "/polanews/api/tts/audio/9b65134c-dac8-4a01-8c2b-8fa48745a879.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 160416,
+      "seconds": 0.218052
+    },
+    {
+      "index": 3,
+      "path": "/polanews/api/tts/audio/ad3fa611-1aaa-4672-969c-002842bc2b06.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 129312,
+      "seconds": 0.230156
+    },
+    {
+      "index": 4,
+      "path": "/polanews/api/tts/audio/f70217a5-6e5a-42c0-af9b-cd6fd904f2cc.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 145728,
+      "seconds": 0.245441
+    },
+    {
+      "index": 5,
+      "path": "/polanews/api/tts/audio/6fe005eb-6dff-4f18-9efa-6fed85d43922.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 87696,
+      "seconds": 0.200187
+    },
+    {
+      "index": 6,
+      "path": "/polanews/api/tts/audio/8c7bb876-25a8-46b3-9cad-f6345f93ad8e.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 102672,
+      "seconds": 0.225953
+    },
+    {
+      "index": 7,
+      "path": "/polanews/api/tts/audio/2af35081-fdc1-49ce-8861-064dd965d7e6.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 151488,
+      "seconds": 0.2301
+    },
+    {
+      "index": 8,
+      "path": "/polanews/api/tts/audio/67c821df-5588-46da-befc-16653fa7ad27.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 135936,
+      "seconds": 0.221328
+    },
+    {
+      "index": 9,
+      "path": "/polanews/api/tts/audio/80d2ab12-3770-4f1b-bffe-8e58cb7c872b.mp3",
+      "ok": true,
+      "status": 200,
+      "mime": "audio/mpeg",
+      "bytes": 68544,
+      "seconds": 0.192967
+    }
+  ],
+  "summary": {
+    "total": 9,
+    "passed": 9
+  },
+  "limitation": "Existing cached audio only; no new speech generation or provider recovery claimed."
+}

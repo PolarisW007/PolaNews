@@ -1,0 +1,200 @@
+{
+  "checked_at": "2026-10-19T16:47:00.388310+00:00",
+  "services": {
+    "nginx": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:29:00 CST",
+    "polazj": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:28:59 CST",
+    "poladiting": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:29:03 CST",
+    "polalumen": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:29:03 CST",
+    "polaluna-backend": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:29:03 CST",
+    "polaluna-frontend": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:29:03 CST",
+    "polaluna-openserp-lite": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:28:59 CST",
+    "polareference": "Result=success\nNRestarts=0\nActiveState=active\nSubState=running\nActiveEnterTimestamp=Mon 2026-10-19 16:29:03 CST"
+  },
+  "nginx_validation": {
+    "exit": 0,
+    "output": "nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nnginx: configuration file /etc/nginx/nginx.conf test is successful"
+  },
+  "supervisor": {
+    "exit": 0,
+    "output": "polanews                         RUNNING   pid 199441, uptime 0:04:13\npolaread-backend                 RUNNING   pid 1303, uptime 8:17:58"
+  },
+  "failed_units": {
+    "exit": 0,
+    "output": "● polanews-search-build-20261019.service loaded failed failed /usr/bin/python3 -c \"import os,pathlib,subprocess\\npid=subprocess.check_output([\\\"supervisorctl\\\",\\\"pid\\\",\\\"polanews\\\"],text=True).strip()\\nenv=dict(x.split(\\\"=\\\",1) for x in pathlib.Path(\\\"/proc/\\\"+pid+\\\"/environ\\\").read_bytes().decode().split(\\\"\\\\0\\\") if \\\"=\\\" in x)\\nenv.update(NODE_OPTIONS=\\\"--max-old-space-size=512\\\",POLANEWS_SCHEDULER_DISABLED=\\\"1\\\",NODE_ENV=\\\"production\\\")\\nos.execvpe(\\\"npm\\\",[\\\"npm\\\",\\\"run\\\",\\\"build\\\",\\\"--\\\",\\\"--webpack\\\"],env)\\n\""
+  },
+  "memory": {
+    "exit": 0,
+    "output": "total        used        free      shared  buff/cache   available\nMem:            3499        2293         119         166        1542        1205\nSwap:              0           0           0"
+  },
+  "disk": {
+    "exit": 0,
+    "output": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/nvme0n1p3   49G   36G   12G  77% /"
+  },
+  "logs": {
+    "/var/log/nginx/error.log": {
+      "bytes": 235,
+      "inode": 1050135,
+      "read_offset": 0,
+      "incremental": false,
+      "truncated": false,
+      "mtime": "2026-10-19T16:11:31.193026+00:00",
+      "tags": {
+        "connection_refused": 0,
+        "no_live_upstream": 0,
+        "upstream_timeout": 0,
+        "tts_fallback_failure": 0,
+        "tts_no_audio": 0,
+        "pool_timeout": 0,
+        "asgi_exception": 0,
+        "slow_query": 0,
+        "next_chunk_failure": 0,
+        "successful_ingest": 0,
+        "process_stopped": 0,
+        "process_started": 0
+      },
+      "upstream_errors_by_app": {},
+      "first_upstream_error": null,
+      "last_upstream_error": null,
+      "max_slow_query_ms": 0
+    },
+    "/var/log/polanews.err.log": {
+      "bytes": 7662131,
+      "inode": 1048052,
+      "read_offset": 7653798,
+      "incremental": true,
+      "truncated": false,
+      "mtime": "2026-10-19T16:45:58.060683+00:00",
+      "tags": {
+        "connection_refused": 0,
+        "no_live_upstream": 0,
+        "upstream_timeout": 0,
+        "tts_fallback_failure": 0,
+        "tts_no_audio": 0,
+        "pool_timeout": 0,
+        "asgi_exception": 0,
+        "slow_query": 0,
+        "next_chunk_failure": 0,
+        "successful_ingest": 0,
+        "process_stopped": 0,
+        "process_started": 0
+      },
+      "upstream_errors_by_app": {},
+      "first_upstream_error": null,
+      "last_upstream_error": null,
+      "max_slow_query_ms": 0
+    },
+    "/var/log/polanews.out.log": {
+      "bytes": 844943,
+      "inode": 1046814,
+      "read_offset": 841840,
+      "incremental": true,
+      "truncated": false,
+      "mtime": "2026-10-19T16:42:47.797979+00:00",
+      "tags": {
+        "connection_refused": 0,
+        "no_live_upstream": 0,
+        "upstream_timeout": 0,
+        "tts_fallback_failure": 0,
+        "tts_no_audio": 0,
+        "pool_timeout": 0,
+        "asgi_exception": 0,
+        "slow_query": 0,
+        "next_chunk_failure": 0,
+        "successful_ingest": 5,
+        "process_stopped": 0,
+        "process_started": 0
+      },
+      "upstream_errors_by_app": {},
+      "first_upstream_error": null,
+      "last_upstream_error": null,
+      "max_slow_query_ms": 0
+    },
+    "/var/log/polaread-backend.err.log": {
+      "bytes": 1103982,
+      "inode": 1047388,
+      "read_offset": 1103982,
+      "incremental": true,
+      "truncated": false,
+      "mtime": "2026-10-19T08:29:10.204595+00:00",
+      "tags": {
+        "connection_refused": 0,
+        "no_live_upstream": 0,
+        "upstream_timeout": 0,
+        "tts_fallback_failure": 0,
+        "tts_no_audio": 0,
+        "pool_timeout": 0,
+        "asgi_exception": 0,
+        "slow_query": 0,
+        "next_chunk_failure": 0,
+        "successful_ingest": 0,
+        "process_stopped": 0,
+        "process_started": 0
+      },
+      "upstream_errors_by_app": {},
+      "first_upstream_error": null,
+      "last_upstream_error": null,
+      "max_slow_query_ms": 0
+    },
+    "/var/log/polaread-backend.out.log": {
+      "bytes": 27302515,
+      "inode": 1047234,
+      "read_offset": 27301646,
+      "incremental": true,
+      "truncated": false,
+      "mtime": "2026-10-19T08:45:34.546480+00:00",
+      "tags": {
+        "connection_refused": 0,
+        "no_live_upstream": 0,
+        "upstream_timeout": 0,
+        "tts_fallback_failure": 0,
+        "tts_no_audio": 0,
+        "pool_timeout": 0,
+        "asgi_exception": 0,
+        "slow_query": 1,
+        "next_chunk_failure": 0,
+        "successful_ingest": 0,
+        "process_stopped": 0,
+        "process_started": 0
+      },
+      "upstream_errors_by_app": {},
+      "first_upstream_error": null,
+      "last_upstream_error": null,
+      "max_slow_query_ms": 4661.39
+    },
+    "/var/log/supervisor/supervisord.log": {
+      "bytes": 150820,
+      "inode": 1086751,
+      "read_offset": 150509,
+      "incremental": true,
+      "truncated": false,
+      "mtime": "2026-10-19T16:42:48.798983+00:00",
+      "tags": {
+        "connection_refused": 0,
+        "no_live_upstream": 0,
+        "upstream_timeout": 0,
+        "tts_fallback_failure": 0,
+        "tts_no_audio": 0,
+        "pool_timeout": 0,
+        "asgi_exception": 0,
+        "slow_query": 0,
+        "next_chunk_failure": 0,
+        "successful_ingest": 0,
+        "process_stopped": 1,
+        "process_started": 1
+      },
+      "upstream_errors_by_app": {},
+      "first_upstream_error": null,
+      "last_upstream_error": null,
+      "max_slow_query_ms": 0
+    }
+  },
+  "news_version": {
+    "exit": 0,
+    "output": "a0c4c0a8075090a5c1c4135f37a30cc973b9be07"
+  },
+  "news_tracked_changes": {
+    "exit": 0,
+    "output": "app/src/app/api/feeds/fetch/route.ts\napp/src/app/api/feeds/route.ts\napp/src/app/page.tsx"
+  },
+  "log_mode": "bounded summaries; no raw logs, credentials, user records, or environment values"
+}

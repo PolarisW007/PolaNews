@@ -1,0 +1,9 @@
+{
+  "scope":"Observed operation metadata; no cloud credentials or raw console output",
+  "normal_reboot":{"region":"cn-hangzhou","instance":"i-bp1hp5oriz9delaqcp2d","force_stop":false,"request_id":"01A1533E-ED5D-5F9A-899F-A6052DE4871F","action_time_utc":"2026-10-19T08:19:55Z","boot_time_cst":"2026-10-19 16:28:55","boot_id":"1bb7f500-9ab5-4ec4-ba53-5e9e8ae7dcc4","authorized":true},
+  "cloud_diagnostic":{"command_id":"c-hz070hfs1ftg268","invoke_id":"t-hz070hfs1g0xr7k","status":"Aborted/ClientNotRunning","executed":false},
+  "historic_observations":{"disk_read_megabytes_per_second_approx":120,"journald_memory_pressure_events_previous_boot":468,"offending_process":"not established","oom_kill":"not proven from retained kernel journal"},
+  "build":{"first_staging_attempt":"failed due to missing copied dependency directory; no live interruption","successful_transient_unit":"polanews-search-build-20261019-2.service","build_id":"mxjTSkOlSRjwwp1MSNAQf","memory_max_megabytes":900,"node_heap_megabytes":512,"cpu_quota_percent":80,"peak_memory_megabytes":694.7,"duration_seconds_approx":143.545,"static_pages":53},
+  "canary_api":{"ai_http":200,"ai_seconds_approx":0.854,"google_http":200,"google_seconds_approx":0.762,"three_simultaneous_requests":{"http_statuses":[200,200,503],"reject_seconds_approx":0.011,"retry_after_seconds":2},"invalid_query_http":400,"missing_query_http":400},
+  "cleanup":{"removed_owned_paths":["/opt/polanews-search-test-20261019","/opt/polanews-search-release-20261019/app","/opt/polanews-search-release-20261019/source.bundle"],"live_has_no_dependency_symlink_to_staging":true,"canary":"inactive","backup_retained":"/opt/polanews-search-release-20261019/backup-live","production_logs_untouched":true,"cloud_spec_unchanged":true,"nginx_unchanged":true,"dns_unchanged":true}
+}

@@ -1,0 +1,19 @@
+{
+  "records": [
+    {
+      "ai": "1. 主机恢复与诊断增强：完成 Pola 主机正常重启，SSH/HTTPS 服务恢复访问；新增只读主机诊断脚本，用于输出有界的内存、IO、服务及内核状态摘要。\n2. 搜索性能优化上线：PolaNews 搜索优化已上线，新增窄投影、同事务同步触发器及分批回填机制，配置搜索池限流保护，搜索响应时间由约 6.87 秒降至 0.783 秒。\n3. 数据迁移与测试验证：完成 212609 行数据迁移与同快照分批校验；新增 42 项搜索测试全部通过，线上 Harness 测试 102/107 通过，Canary 及正式站阅读旅程验证正常。\n4. 已知风险与待办事项：播报接口日期仍停留在 10 月 17 日（供应商恢复待验证），服务器内 DNS 解析约 5 秒（已申请关闭 Tailscale DNS 接管），需持续关注历史根因与长期容量风险。",
+      "latest_snapshot": true,
+      "project": "PolaUUH",
+      "recordId": "FE1SYk0NjV",
+      "source_url": "https://alidocs.dingtalk.com/i/nodes/nYMoO1rWxa9EPkLvsRGvXxovV47Z3je9"
+    },
+    {
+      "ai": "1. 功能与架构更新：完成搜索窄投影优化，永久派生表、触发器及分批回填机制正式上线，相关 Requirement/SPEC/SDD 文档已同步记录更新。\n2. 性能提升与验证结果：公网 AI 搜索耗时由约 6.87 秒降至 0.78 秒；Canary 与公网旅程验证全通过，生产环境 21 万余行数据分批核对差异为 0，全系复测通过 102/107。\n3. 遗留缺陷与待办：5 个 OAuth 入口未实现真实平台跳转明确失败；音频播报仍为旧缓存，新生成功能未恢复；服务器内 DNS 解析耗时约 5 秒待独立授权。\n4. 稳定性风险：主机曾存在持续内存压力，旧故障进程根因及共机容量风险保留待查；钉钉项目文档与 AI 表格的具体链接和记录 ID 待回读后补回。",
+      "latest_snapshot": true,
+      "project": "PolaNews",
+      "recordId": "YV99QhXxkG",
+      "source_url": "https://alidocs.dingtalk.com/i/nodes/1OQX0akWmxOEedR6tNMgxqA58GlDd3mE"
+    }
+  ],
+  "success": true
+}

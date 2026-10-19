@@ -1,0 +1,24 @@
+Migration start UTC: 2026-10-19T16:28:55.656240+00:00 available MiB: 1258
+{"batches":20,"scanned":10000}
+{"batches":40,"scanned":20000}
+{"batches":60,"scanned":30000}
+{"batches":80,"scanned":40000}
+{"batches":100,"scanned":50000}
+{"batches":120,"scanned":60000}
+{"batches":140,"scanned":70000}
+{"batches":160,"scanned":80000}
+{"batches":180,"scanned":90000}
+{"batches":200,"scanned":100000}
+{"batches":220,"scanned":110000}
+{"batches":240,"scanned":120000}
+{"batches":260,"scanned":130000}
+{"batches":280,"scanned":140000}
+{"batches":300,"scanned":150000}
+{"batches":320,"scanned":160000}
+{"batches":340,"scanned":170000}
+{"batches":360,"scanned":180000}
+{"batches":380,"scanned":190000}
+{"batches":400,"scanned":200000}
+{"batches":420,"scanned":210000}
+{"mode":"apply","batches":426,"scanned":212609,"elapsed_ms":131317}
+Migration completed UTC: 2026-10-19T16:31:27.446978+00:00 exit: 1

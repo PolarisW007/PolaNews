@@ -1,0 +1,53 @@
+{
+  "checked_at": "2026-10-19T16:39:28.497Z",
+  "base": "http://127.0.0.1:13457",
+  "results": [
+    {
+      "name": "login-retains-app-return",
+      "ok": true,
+      "href": "/PolaUUH/admin/login?next=%2Fpolanews"
+    },
+    {
+      "name": "header-search-renders-real-results",
+      "ok": true,
+      "count": 20
+    },
+    {
+      "name": "url-query-populates-search-input",
+      "ok": true
+    },
+    {
+      "name": "search-pagination",
+      "ok": true,
+      "before": 20,
+      "after": 40
+    },
+    {
+      "name": "real-article-opens",
+      "ok": true,
+      "path": "/polanews/article/11735b17-e556-4eaf-8208-75b53734c303",
+      "finalPath": "/polanews/article/11735b17-e556-4eaf-8208-75b53734c303",
+      "bodyLength": 1537
+    },
+    {
+      "name": "article-mobile-no-overflow",
+      "ok": true
+    },
+    {
+      "name": "direct-search-link-reloads",
+      "ok": true
+    },
+    {
+      "name": "trending-page-renders",
+      "ok": true
+    },
+    {
+      "name": "no-script-or-unexpected-network-errors",
+      "ok": true,
+      "errors": [],
+      "network": []
+    }
+  ],
+  "errors": [],
+  "network": []
+}

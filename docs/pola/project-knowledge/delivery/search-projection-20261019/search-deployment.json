@@ -1,0 +1,31 @@
+{
+  "release_started_at": "2026-10-19T16:42:46.922517+00:00",
+  "old_head": "be1bcb149911e85771a2c717615f4035f7c31228",
+  "head": "a0c4c0a",
+  "runtime_source_commit": "53bee32",
+  "old_pid": 1298,
+  "old_build_id": "O3O47r_L0KEqg9J56YnM5",
+  "backup": "/opt/polanews-search-release-20261019/backup-live",
+  "database_validation": "212609/212609 mismatches=0",
+  "canary_journey": "9/9",
+  "nginx_changed": false,
+  "source_sha256": {
+    "next.config.ts": "71e9f7e7da2f3154e6e16fbe856e7035aa1a82c7324c330c768308a4b735edf2",
+    "src/app/api/articles/search/route.ts": "6e77727dc886ae284d048fbc9e807c7189bba2ed4d066c6100bc43b2dccfd123",
+    "src/lib/services/article-search.ts": "3c023cf71ee6e88a712714a3c7706018b55a2e87596a1eee94d2da3d5b0ccaad"
+  },
+  "stop_started_at": "2026-10-19T16:42:46.924184+00:00",
+  "stopped_at": "2026-10-19T16:42:47.070383+00:00",
+  "start_completed_at": "2026-10-19T16:42:48.826426+00:00",
+  "status": "deployed",
+  "smoke": {
+    "status": 200,
+    "seconds": 0.816,
+    "total": 44568,
+    "articles": 2
+  },
+  "new_pid": 199441,
+  "build_id": "mxjTSkOlSRjwwp1MSNAQf",
+  "completed_at": "2026-10-19T16:42:49.791318+00:00",
+  "tracked_changes": "app/src/app/api/feeds/fetch/route.ts\napp/src/app/api/feeds/route.ts\napp/src/app/page.tsx"
+}
