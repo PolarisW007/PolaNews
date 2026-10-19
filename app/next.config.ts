@@ -5,6 +5,7 @@ const basePath = '/polanews';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: { cpus: 1 },
   basePath,
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,

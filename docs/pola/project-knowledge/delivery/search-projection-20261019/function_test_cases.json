@@ -1,0 +1,15 @@
+{
+  "source_docs":["docs/pola/project-knowledge/requirements/2026-10-19-search-projection.md","docs/pola/project-knowledge/specs/2026-10-19-search-projection.md","docs/pola/project-knowledge/architecture/2026-10-19-search-projection-sdd.md"],
+  "features":[
+    {"id":"F1","name":"搜索契约和资源边界","risk":"P1","acceptance_ids":["A1","A3"],"source_refs":["docs/pola/project-knowledge/specs/2026-10-19-search-projection.md"],
+     "unit_cases":[{"id":"UT-SEARCH","target":"app/scripts/harness-article-search.cjs","scenario":"参数、快照、并发、超时释放、错误脱敏","assertions":["正常结果保留字段与片段","第三个并发请求拒绝且不排队","失败销毁连接并释放槽位","无效输入400，过载503和Retry-After"],"expected":"17项通过","command":"node app/scripts/harness-article-search.cjs"}],
+     "integration_cases":[{"id":"IT-CONTRACT","target":"app/scripts/harness-article-search-pg.cjs","scenario":"两字符/中文/大小写/通配符/NULL/分页的新旧真实SQL对照","assertions":["匹配总数、文章字段及分页ID一致","投影不存在时旧表仍可读取"],"expected":"隔离schema对照通过","command":"node app/scripts/harness-article-search-pg.cjs"}],"regression_cases":[]},
+    {"id":"F2","name":"派生表与迁移一致性","risk":"P1","acceptance_ids":["A2"],"source_refs":["docs/pola/project-knowledge/architecture/2026-10-19-search-projection-sdd.md"],
+     "unit_not_applicable_reason":"触发器、外键、事务和并发快照必须在真实 PostgreSQL 随机隔离 schema 验证。","unit_cases":[],
+     "integration_cases":[{"id":"IT-MIGRATION","target":"app/scripts/harness-article-search-pg.cjs","scenario":"触发同步、并发旧快照回填、事务回滚、幂等和撤销迁移","assertions":["更新的新内容不被旧回填覆盖","删除级联，回滚同步撤销","不相关字段不重写投影","撤销仅删派生结构，原文章保留"],"expected":"24项隔离PostgreSQL检查通过","command":"node app/scripts/harness-article-search-pg.cjs"}],"regression_cases":[]},
+    {"id":"F3","name":"发布、性能与主流程","risk":"P1","acceptance_ids":["A4"],"source_refs":["docs/pola/project-knowledge/requirements/2026-10-19-search-projection.md"],
+     "unit_not_applicable_reason":"真实部署和资源观测以构建、canary、公网旅程及运行日志作为证据。","unit_cases":[],
+     "integration_cases":[],"regression_cases":[{"id":"RT-RELEASE","target":"PolaUUH/scripts/pola_news_journey.cjs","scenario":"相同canary及公网搜索、分页、文章、移动端、趋势和登录next","assertions":["真实结果及页面可读","没有新增脚本或资源错误","搜索延迟和资源使用记录真实前后对照"],"expected":"两环境旅程通过且保留供应商遗留失败","manual_verification":"受限构建与doctor通过、全量迁移字段核对、运行真实旅程、检查增量日志和主机压力。"}]}
+  ],
+  "coverage":[{"acceptance_id":"A1","case_ids":["UT-SEARCH","IT-CONTRACT"]},{"acceptance_id":"A2","case_ids":["IT-MIGRATION"]},{"acceptance_id":"A3","case_ids":["UT-SEARCH"]},{"acceptance_id":"A4","case_ids":["RT-RELEASE"]}]
+}
