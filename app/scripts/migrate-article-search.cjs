@@ -43,13 +43,28 @@ async function backfillBatch(client, schema = 'public', cursor = null, batchSize
 
 async function verify(client, schema = 'public') {
   const n = names(schema);
-  return (await client.query(`SELECT
-    (SELECT COUNT(*) FROM ${n.articles})::int AS source_rows,
-    (SELECT COUNT(*) FROM ${n.search})::int AS search_rows,
-    (SELECT COUNT(*) FROM ${n.articles} a LEFT JOIN ${n.search} s ON s.id=a.id
-     WHERE s.id IS NULL OR ROW(s.feed_id,s.title,s.content,s.published_at)
-       IS DISTINCT FROM ROW(a.feed_id,a.title,a.content,a.published_at))::int AS mismatches`
-  )).rows[0];
+  const started = Date.now();
+  let cursor = null, sourceRows = 0, mismatches = 0;
+  await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  try {
+    while (true) {
+      if (Date.now() - started > 600000) throw new Error('Verification time budget exceeded');
+      const result = (await client.query(`WITH batch AS MATERIALIZED (
+        SELECT id,feed_id,title,content,published_at FROM ${n.articles}
+        WHERE ($1::uuid IS NULL OR id > $1::uuid) ORDER BY id LIMIT 500
+      ) SELECT (SELECT id FROM batch ORDER BY id DESC LIMIT 1) AS last_id,
+        COUNT(*)::int AS scanned,
+        COUNT(*) FILTER (WHERE s.id IS NULL OR ROW(s.feed_id,s.title,s.content,s.published_at)
+          IS DISTINCT FROM ROW(a.feed_id,a.title,a.content,a.published_at))::int AS mismatches
+        FROM batch a LEFT JOIN ${n.search} s ON s.id=a.id`, [cursor])).rows[0];
+      if (!result.scanned) break;
+      sourceRows += result.scanned; mismatches += result.mismatches; cursor = result.last_id;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    const searchRows = (await client.query(`SELECT COUNT(*)::int AS n FROM ${n.search}`)).rows[0].n;
+    await client.query('COMMIT');
+    return { source_rows: sourceRows, search_rows: searchRows, mismatches };
+  } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
 }
 
 function downSql(schema = 'public') {

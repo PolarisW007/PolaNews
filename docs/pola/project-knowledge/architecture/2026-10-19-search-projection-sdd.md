@@ -4,6 +4,8 @@
 
 article_search_documents 以文章 id 为主键和 ON DELETE CASCADE 外键。AFTER INSERT / UPDATE OF 搜索字段的触发器在同一事务 upsert；不相关 AI/语音更新不触发。回填用源行 KEY SHARE 防止删除竞争，ON CONFLICT DO NOTHING 避免覆盖触发器已经同步的新值。死锁/锁超时有限重试，所有参数绑定。
 
+最终校验同样按主键每批 500 行，并在同一个 REPEATABLE READ READ ONLY 快照中累计来源数量和所有字段差异、核对投影总数；避免大表整表 JOIN 在旧统计下超时。每批间隔 10ms，总预算 10 分钟，单条 SQL 超时不变。
+
 应用使用独立最大 2 连接池，拒绝超过 2 个活动搜索，不积压等待队列。每个请求一个 REPEATABLE READ READ ONLY 事务，禁用该事务并行 worker，5 秒 statement_timeout、6.5 秒客户端 query_timeout。错误连接销毁以回滚未完成事务，避免污染连接池。无计数 TTL 缓存，不引入过期计数。
 
 计数/分页在窄表完成，MATERIALIZED 当前页 ID 后按主键读取文章全文，防止再次扫描宽表。投影不存在时保留相同旧查询语义，但仍受资源边界约束。应用不会在启动时自动做生产迁移。

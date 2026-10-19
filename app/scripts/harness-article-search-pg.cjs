@@ -105,6 +105,16 @@ async function main() {
     assert.equal((await migration.verify(admin, schema)).mismatches, 0); cases++;
     await writer.query(`DELETE FROM ${prefix}articles WHERE id=$1`, [article(3)]);
     assert.equal((await admin.query(`SELECT COUNT(*)::int AS n FROM ${prefix}article_search_documents WHERE id=$1`, [article(3)])).rows[0].n, 0); cases++;
+    await writer.query(`INSERT INTO ${prefix}articles(id,feed_id,title,content,published_at)
+      SELECT ('00000000-0000-4000-8000-'||lpad((1000+n)::text,12,'0'))::uuid,$1,'batch fixture',NULL,now()
+      FROM generate_series(1,501) n`, [feed]);
+    assert.deepEqual(await migration.verify(admin, schema), { source_rows: 504, search_rows: 504, mismatches: 0 });
+    await admin.query(`UPDATE ${prefix}article_search_documents SET content='incorrect fixture' WHERE id=$1`, [article(1501)]);
+    assert.equal((await migration.verify(admin, schema)).mismatches, 1, 'Verification reaches the next keyset batch');
+    await writer.query(`UPDATE ${prefix}articles SET content='repaired fixture' WHERE id=$1`, [article(1501)]);
+    assert.equal((await migration.verify(admin, schema)).mismatches, 0);
+    await writer.query(`DELETE FROM ${prefix}articles WHERE id BETWEEN $1 AND $2`, [article(1001), article(1501)]);
+    cases++;
     await admin.query(migration.downSql(schema));
     assert.equal((await admin.query(`SELECT COUNT(*)::int AS n FROM ${prefix}articles`)).rows[0].n, 3);
     assert.equal((await api.searchArticles('AI', 1, 20)).total, 3); cases++;
